@@ -24,9 +24,9 @@ async def cmd_settings(message: Message, command: CommandObject, bot: Bot, db: D
         await message.answer(settings_text(settings))
         return
 
-    group_id = await editable_group_id(message, bot, config)
+    group_id = await editable_group_id(message, bot, db, config)
     if group_id is None:
-        await message.answer("⛔ Sozlamalarni faqat guruh adminlari o'zgartira oladi.")
+        await message.answer("⛔ Sozlamalarni faqat guruh adminlari va boshqaruvchilari o'zgartira oladi.")
         return
 
     if len(args) != 2:
@@ -66,9 +66,9 @@ async def cmd_settings(message: Message, command: CommandObject, bot: Bot, db: D
 
 @router.message(Command("setsticker"))
 async def cmd_setsticker(message: Message, command: CommandObject, bot: Bot, db: Database, config: Config):
-    group_id = await editable_group_id(message, bot, config)
+    group_id = await editable_group_id(message, bot, db, config)
     if group_id is None:
-        await message.answer("⛔ Stikerni faqat guruh adminlari o'zgartira oladi.")
+        await message.answer("⛔ Stikerni faqat guruh adminlari va boshqaruvchilari o'zgartira oladi.")
         return
 
     if (command.args or "").strip().lower() == "off":

@@ -11,7 +11,7 @@ from aiogram.types import CallbackQuery, Message
 from birthday_bot.config import Config
 from birthday_bot.database import Database
 from birthday_bot.dates import now
-from birthday_bot.handlers.ui import TEXT_INPUT, ensure_admin, show
+from birthday_bot.handlers.ui import TEXT_INPUT, ensure_manager, show
 from birthday_bot.keyboards import (
     Menu,
     SaveNew,
@@ -35,7 +35,7 @@ class AddBirthday(StatesGroup):
 @router.callback_query(Menu.filter(F.action == "add"))
 async def cb_add(callback: CallbackQuery, callback_data: Menu, bot: Bot, db: Database, state: FSMContext):
     group_id = callback_data.group_id
-    if not await ensure_admin(callback, bot, db, group_id):
+    if not await ensure_manager(callback, bot, db, group_id):
         return
     await state.set_state(AddBirthday.name)
     await state.set_data({"group_id": group_id})
@@ -78,7 +78,7 @@ async def cb_save(callback: CallbackQuery, bot: Bot, db: Database, state: FSMCon
     data = await state.get_data()
     await state.clear()
     group_id = data["group_id"]
-    if not await ensure_admin(callback, bot, db, group_id):
+    if not await ensure_manager(callback, bot, db, group_id):
         return
     await db.add_birthday(
         group_id=group_id,

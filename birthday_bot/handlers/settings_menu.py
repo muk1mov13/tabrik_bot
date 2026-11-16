@@ -12,7 +12,7 @@ from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 
 from birthday_bot.database import Database
 from birthday_bot.dates import parse_time
-from birthday_bot.handlers.ui import TEXT_INPUT, ensure_admin, show
+from birthday_bot.handlers.ui import TEXT_INPUT, ensure_manager, show
 from birthday_bot.keyboards import CUSTOM_TIME, Menu, SetRemind, SetTime, cancel_keyboard, settings_keyboard
 from birthday_bot.models import MAX_REMIND_DAYS
 from birthday_bot.texts import ASK_TIME_TEXT, STALE_TEXT, settings_menu_text
@@ -32,7 +32,7 @@ async def settings_view(db: Database, group_id: int) -> tuple[str, InlineKeyboar
 
 @router.callback_query(Menu.filter(F.action == "settings"))
 async def cb_settings(callback: CallbackQuery, callback_data: Menu, bot: Bot, db: Database):
-    if await ensure_admin(callback, bot, db, callback_data.group_id):
+    if await ensure_manager(callback, bot, db, callback_data.group_id):
         text, keyboard = await settings_view(db, callback_data.group_id)
         await show(callback, text, keyboard)
 
@@ -42,7 +42,7 @@ async def cb_set_time(
     callback: CallbackQuery, callback_data: SetTime, bot: Bot, db: Database, state: FSMContext
 ):
     group_id, minutes = callback_data.group_id, callback_data.minutes
-    if not await ensure_admin(callback, bot, db, group_id):
+    if not await ensure_manager(callback, bot, db, group_id):
         return
     if minutes == CUSTOM_TIME:
         await state.set_state(SettingsInput.time)
@@ -60,7 +60,7 @@ async def cb_set_time(
 @router.callback_query(SetRemind.filter())
 async def cb_set_remind(callback: CallbackQuery, callback_data: SetRemind, bot: Bot, db: Database):
     group_id, days = callback_data.group_id, callback_data.days
-    if not await ensure_admin(callback, bot, db, group_id):
+    if not await ensure_manager(callback, bot, db, group_id):
         return
     if not 0 <= days <= MAX_REMIND_DAYS:
         await callback.answer(STALE_TEXT, show_alert=True)
@@ -80,7 +80,7 @@ async def got_time(message: Message, bot: Bot, db: Database, state: FSMContext):
         )
         return
     await state.clear()
-    if not await ensure_admin(message, bot, db, group_id):
+    if not await ensure_manager(message, bot, db, group_id):
         return
     await db.set_setting(group_id, "notify_time", at)
     text, keyboard = await settings_view(db, group_id)

@@ -516,3 +516,11 @@ async def test_settings_menu_forged_by_member(send, db):
     await db.upsert_group(G, "Oila")
     assert await send.click(SetRemind(group_id=G, days=7).pack(), from_id=MEMBER) == []
     assert (await db.get_settings(G)).remind_days == 0
+
+
+async def test_manager_can_use_commands(send, db):
+    await db.add_manager(G, MEMBER)
+    (reply,) = await send("/add Ali 15.03", from_id=MEMBER)
+    assert "Qo'shildi" in reply
+    (reply,) = await send("/settings remind 3", from_id=MEMBER)
+    assert "3 kun oldin" in reply

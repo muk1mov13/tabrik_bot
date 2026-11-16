@@ -49,9 +49,9 @@ async def answer_lines(message: Message, lines: list[str]):
 
 @router.message(Command("add"))
 async def cmd_add(message: Message, command: CommandObject, bot: Bot, db: Database, config: Config):
-    group_id = await editable_group_id(message, bot, config)
+    group_id = await editable_group_id(message, bot, db, config)
     if group_id is None:
-        await message.answer("⛔ Tug'ilgan kun qo'shish faqat guruh adminlariga ruxsat etilgan.")
+        await message.answer("⛔ Tug'ilgan kun qo'shish faqat guruh adminlari va boshqaruvchilariga ruxsat etilgan.")
         return
 
     try:
@@ -91,9 +91,9 @@ async def cmd_add(message: Message, command: CommandObject, bot: Bot, db: Databa
 
 @router.message(Command("edit"))
 async def cmd_edit(message: Message, command: CommandObject, bot: Bot, db: Database, config: Config):
-    group_id = await editable_group_id(message, bot, config)
+    group_id = await editable_group_id(message, bot, db, config)
     if group_id is None:
-        await message.answer("⛔ Tahrirlash faqat guruh adminlariga ruxsat etilgan.")
+        await message.answer("⛔ Tahrirlash faqat guruh adminlari va boshqaruvchilariga ruxsat etilgan.")
         return
 
     try:
@@ -117,9 +117,9 @@ async def cmd_edit(message: Message, command: CommandObject, bot: Bot, db: Datab
 
 @router.message(Command("remove"))
 async def cmd_remove(message: Message, command: CommandObject, bot: Bot, db: Database, config: Config):
-    group_id = await editable_group_id(message, bot, config)
+    group_id = await editable_group_id(message, bot, db, config)
     if group_id is None:
-        await message.answer("⛔ Yozuvni o'chirish faqat guruh adminlariga ruxsat etilgan.")
+        await message.answer("⛔ Yozuvni o'chirish faqat guruh adminlari va boshqaruvchilariga ruxsat etilgan.")
         return
 
     arg = (command.args or "").strip()

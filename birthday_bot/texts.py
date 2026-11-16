@@ -70,7 +70,7 @@ NOT_ADMIN_TEXT = (
     "Tug'ilgan kuningizni qo'shishni admindan so'rang 🙂"
 )
 # Callback alert — oddiy matn (HTML emas), 200 belgigacha
-NOT_ADMIN_ALERT = "⛔ Bu amal faqat guruh adminlariga ruxsat etilgan."
+NOT_ADMIN_ALERT = "⛔ Bu amal faqat guruh adminlari va boshqaruvchilariga ruxsat etilgan."
 STALE_TEXT = "Bu menyu eskirgan. /menu ni bosing."
 NO_GROUPS_TEXT = (
     "Hali birorta guruhingiz ulanmagan.\n\n"

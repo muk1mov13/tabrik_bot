@@ -2,7 +2,7 @@
 keyboards.py — Shaxsiy chat menyusi tugmalari va guruhdagi taklif tugmasi.
 
 Callback ma'lumotida group_id bor, lekin unga ishonilmaydi: har bir
-bosishda adminlik qayta tekshiriladi (handlers/ui.py: ensure_admin).
+bosishda rol qayta tekshiriladi (handlers/ui.py: ensure_role).
 """
 
 from datetime import time

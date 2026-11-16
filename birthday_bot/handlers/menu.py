@@ -12,11 +12,11 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 
 from birthday_bot.database import Database
-from birthday_bot.handlers.ui import ensure_admin, show
+from birthday_bot.handlers.ui import ensure_manager, show
 from birthday_bot.keyboards import Cancel, Menu, PickGroup, groups_keyboard, main_menu_keyboard
 from birthday_bot.models import Group
 from birthday_bot.parsing import parse_group_payload
-from birthday_bot.permissions import is_admin
+from birthday_bot.permissions import Role, get_role
 from birthday_bot.texts import CHOOSE_GROUP_TEXT, NO_GROUPS_TEXT, NOT_ADMIN_TEXT, menu_text
 
 router = Router(name="menu")
@@ -24,10 +24,10 @@ router.message.filter(F.chat.type == ChatType.PRIVATE)
 
 
 async def available_groups(bot: Bot, db: Database, user_id: int) -> list[Group]:
-    """Foydalanuvchi hozir ham admini bo'lgan bog'langan guruhlar."""
+    """Foydalanuvchi hozir ham boshqara oladigan bog'langan guruhlar."""
     groups = []
     for group in await db.linked_groups(user_id):
-        if await is_admin(bot, group.group_id, user_id):
+        if await get_role(bot, db, group.group_id, user_id) >= Role.MANAGER:
             groups.append(group)
         else:
             await db.unlink_user(user_id, group.group_id)
@@ -61,7 +61,7 @@ async def cmd_start_link(message: Message, command: CommandObject, bot: Bot, db:
         await message.answer(text, reply_markup=keyboard)
         return
 
-    if not await is_admin(bot, group_id, user_id):
+    if await get_role(bot, db, group_id, user_id) < Role.MANAGER:
         await db.unlink_user(user_id, group_id)
         await message.answer(NOT_ADMIN_TEXT)
         return
@@ -91,7 +91,7 @@ async def cb_home(
     state: FSMContext,
 ):
     await state.clear()
-    if await ensure_admin(callback, bot, db, callback_data.group_id):
+    if await ensure_manager(callback, bot, db, callback_data.group_id):
         text, keyboard = await main_menu_view(db, callback.from_user.id, callback_data.group_id)
         await show(callback, text, keyboard)
 
@@ -104,6 +104,6 @@ async def cb_groups(callback: CallbackQuery, bot: Bot, db: Database):
 
 @router.callback_query(PickGroup.filter())
 async def cb_pick_group(callback: CallbackQuery, callback_data: PickGroup, bot: Bot, db: Database):
-    if await ensure_admin(callback, bot, db, callback_data.group_id):
+    if await ensure_manager(callback, bot, db, callback_data.group_id):
         text, keyboard = await main_menu_view(db, callback.from_user.id, callback_data.group_id)
         await show(callback, text, keyboard)

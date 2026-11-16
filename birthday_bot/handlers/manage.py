@@ -13,7 +13,7 @@ from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 from birthday_bot.config import Config
 from birthday_bot.database import Database
 from birthday_bot.dates import now
-from birthday_bot.handlers.ui import TEXT_INPUT, ensure_admin, show
+from birthday_bot.handlers.ui import TEXT_INPUT, ensure_manager, show
 from birthday_bot.keyboards import (
     RECORDS_PAGE_SIZE,
     Menu,
@@ -63,7 +63,7 @@ async def records_view(db: Database, group_id: int, page: int) -> tuple[str, Inl
 async def cb_records(
     callback: CallbackQuery, callback_data: Union[Menu, RecordPage], bot: Bot, db: Database
 ):
-    if not await ensure_admin(callback, bot, db, callback_data.group_id):
+    if not await ensure_manager(callback, bot, db, callback_data.group_id):
         return
     page = getattr(callback_data, "page", 0)
     text, keyboard = await records_view(db, callback_data.group_id, page)
@@ -80,7 +80,7 @@ async def cb_record(
     state: FSMContext,
 ):
     group_id, page = callback_data.group_id, callback_data.page
-    if not await ensure_admin(callback, bot, db, group_id):
+    if not await ensure_manager(callback, bot, db, group_id):
         return
     birthday = await db.get_birthday(group_id, callback_data.record_id)
     if birthday is None:
@@ -121,7 +121,7 @@ async def _edited_record(
     """Tahrirlanayotgan yozuv va ro'yxat sahifasi; bo'lmasa None (holat tozalanadi)."""
     data = await state.get_data()
     await state.clear()
-    if not await ensure_admin(message, bot, db, data["group_id"]):
+    if not await ensure_manager(message, bot, db, data["group_id"]):
         return None
     birthday = await db.get_birthday(data["group_id"], data["record_id"])
     if birthday is None:
