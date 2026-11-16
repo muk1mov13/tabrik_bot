@@ -1,5 +1,7 @@
-aiogram~=3.13
-aiosqlite~=0.20
-APScheduler~=3.10
-python-dotenv~=1.0
+# Aniq versiyalar: server lokal testlardan o'tgan kutubxonalar bilan ishlashi uchun.
+# Yangilashda: versiyani o'zgartiring, pytest ni ishga tushiring, keyin deploy qiling.
+aiogram==3.13.1
+aiosqlite==0.22.1
+APScheduler==3.11.2
+python-dotenv==1.0.1
 tzdata
