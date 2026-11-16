@@ -50,6 +50,7 @@ HELP_TEXT = (
     "(<code>/setsticker off</code> — o'chirish)\n\n"
     "<b>Adminlar uchun:</b>\n"
     "• odam xabariga reply qilib <code>/manager</code> — boshqaruvchi tayinlash "
+    "(yoki menyuda 👥 Boshqaruvchilar → 🔗 Taklif havolasi) "
     "(<code>/manager off</code> — olib tashlash)\n\n"
     "ID ni /list dan oling. Botni guruhga qo'shing — u tug'ilgan kuni bor "
     "odamni har kuni tabriklab turadi 🎉"

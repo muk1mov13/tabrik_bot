@@ -37,14 +37,29 @@ Kim nima qila oladi:
 
 | Rol | Kim | Nima qiladi |
 |---|---|---|
-| Admin | guruh egasi va adminlari | hammasi + boshqaruvchi tayinlash (`/manager`) |
-| Boshqaruvchi | botni qo'shgan odam yoki admin tayinlagan | hamma tug'ilgan kunlar va sozlamalar |
+| Admin | guruh egasi va adminlari | hammasi + boshqaruvchini olib tashlash |
+| Boshqaruvchi | botni qo'shgan odam, admin tayinlagan yoki taklif havolasi bilan kelgan | hamma tug'ilgan kunlar, sozlamalar, yangi boshqaruvchini taklif qilish |
 | A'zo | guruhning boshqa a'zolari | faqat o'z tug'ilgan kuni |
 
 Keyinchalik shaxsiy chatda `/menu` yozish kifoya. Bir necha guruhda bo'lsangiz,
 bot qaysi guruh bilan ishlashni so'raydi. Tugma ko'rinmay qolsa, guruhda `/menu`
 yozing. Bot guruhga tabrik yubora olmasa (masalan, guruhda yozish cheklangan bo'lsa),
 boshqaruvchilarga shaxsiy chatda kuniga bir marta xabar beradi.
+
+Boshqaruvchilar uchun qulayliklar:
+
+- **Menyu** — Telegram'dagi "Menu" tugmasi yoki `/menu`. Menyuning o'zida yaqin 3 ta
+  tug'ilgan kun ko'rinadi.
+- **Ertalabki xabar** — tabrikdan 1 soat oldin: bugun va ertaga kimning tug'ilgan kuni.
+  Sozlamalarda har kim o'zi uchun o'chirib qo'yishi mumkin.
+- **Ro'yxat** — 🔎 Qidirish (ismning bir qismi bo'yicha) va 📤 Yuklab olish (fayl,
+  uni ➕ Qo'shish orqali qayta yuborsangiz ro'yxat tiklanadi).
+- **Yozuv kartasi** — 👤 Telegram'dan belgilash: ro'yxat orqali qo'shilgan odamni
+  keyin Telegram akkauntiga bog'lash, tabrikda u belgilanadi.
+- **👥 Boshqaruvchilar** → 🔗 Taklif havolasi: bir martalik, 7 kun amal qiladi,
+  faqat guruh a'zosida ishlaydi. Guruhda reply qilib `/manager` yozish ham mumkin.
+- **⚙️ Sozlamalar** — ✍️ o'z tabrik matni (`{ism}` o'rniga ism qo'yiladi),
+  👁 Ko'rish, 🎨 Stiker.
 
 Serverga joylash: [deploy/DEPLOY.md](deploy/DEPLOY.md) (Ubuntu + systemd).
 
