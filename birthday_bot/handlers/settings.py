@@ -1,51 +1,31 @@
 """
-group_settings.py — Guruh sozlamalari buyruqlari: /settings va /setsticker.
+settings.py — Guruh sozlamalari: /settings va /setsticker.
 """
 
 from aiogram import Bot, Router
 from aiogram.filters import Command, CommandObject
 from aiogram.types import Message
 
-import database as db
-from permissions import can_edit, get_target_group_id
-from utils import parse_time
+from birthday_bot.config import Config
+from birthday_bot.database import Database
+from birthday_bot.dates import format_time, parse_time
+from birthday_bot.models import MAX_REMIND_DAYS, MAX_UPCOMING_DAYS
+from birthday_bot.permissions import editable_group_id, target_group_id
+from birthday_bot.texts import SETTINGS_USAGE, settings_text
 
-router = Router()
-
-MAX_REMIND_DAYS = 30
-MAX_UPCOMING_DAYS = 60
-
-SETTINGS_USAGE = (
-    "Sozlamani o'zgartirish (faqat adminlar):\n"
-    "• <code>/settings time 09:00</code> — tabrik vaqti\n"
-    f"• <code>/settings remind 3</code> — necha kun oldin eslatish (0 — o'chirish, max {MAX_REMIND_DAYS})\n"
-    f"• <code>/settings upcoming 14</code> — /upcoming necha kunni ko'rsatadi (1–{MAX_UPCOMING_DAYS})\n"
-    "• stikerga reply qilib <code>/setsticker</code>"
-)
-
-
-def format_settings(settings: dict) -> str:
-    remind = settings["remind_days"]
-    return (
-        "⚙️ <b>Guruh sozlamalari</b>\n\n"
-        f"🕗 Tabrik vaqti: <b>{settings['notify_time'].strftime('%H:%M')}</b>\n"
-        f"⏰ Oldindan eslatma: <b>{f'{remind} kun oldin' if remind else 'o‘chirilgan'}</b>\n"
-        f"🔔 /upcoming: <b>{settings['upcoming_days']} kun</b>\n"
-        f"🎨 Stiker: <b>{'bor' if settings['sticker_file_id'] else 'yo‘q'}</b>\n\n"
-        + SETTINGS_USAGE
-    )
+router = Router(name="settings")
 
 
 @router.message(Command("settings"))
-async def cmd_settings(message: Message, command: CommandObject, bot: Bot):
+async def cmd_settings(message: Message, command: CommandObject, bot: Bot, db: Database, config: Config):
     args = (command.args or "").split()
     if not args:
-        settings = await db.get_settings(get_target_group_id(message.chat))
-        await message.answer(format_settings(settings))
+        settings = await db.get_settings(target_group_id(message.chat, config))
+        await message.answer(settings_text(settings))
         return
 
-    allowed, group_id = await can_edit(message, bot)
-    if not allowed:
+    group_id = await editable_group_id(message, bot, config)
+    if group_id is None:
         await message.answer("⛔ Sozlamalarni faqat guruh adminlari o'zgartira oladi.")
         return
 
@@ -60,7 +40,8 @@ async def cmd_settings(message: Message, command: CommandObject, bot: Bot):
             await message.answer("❗ Vaqt formati: <code>HH:MM</code>, masalan <code>09:00</code>")
             return
         await db.set_setting(group_id, "notify_time", at)
-        await message.answer(f"✅ Tabrik vaqti: <b>{at.strftime('%H:%M')}</b>")
+        await message.answer(f"✅ Tabrik vaqti: <b>{format_time(at)}</b>")
+
     elif key == "remind":
         if not value.isdigit() or int(value) > MAX_REMIND_DAYS:
             await message.answer(f"❗ 0 dan {MAX_REMIND_DAYS} gacha son kiriting.")
@@ -71,20 +52,22 @@ async def cmd_settings(message: Message, command: CommandObject, bot: Bot):
             f"✅ Oldindan eslatma: <b>{days} kun oldin</b>" if days
             else "✅ Oldindan eslatma o'chirildi."
         )
+
     elif key == "upcoming":
         if not value.isdigit() or not 1 <= int(value) <= MAX_UPCOMING_DAYS:
             await message.answer(f"❗ 1 dan {MAX_UPCOMING_DAYS} gacha son kiriting.")
             return
         await db.set_setting(group_id, "upcoming_days", int(value))
-        await message.answer(f"✅ /upcoming endi <b>{value} kun</b>ni ko'rsatadi.")
+        await message.answer(f"✅ /upcoming endi <b>{int(value)} kun</b>ni ko'rsatadi.")
+
     else:
         await message.answer(f"❗ Noma'lum sozlama.\n\n{SETTINGS_USAGE}")
 
 
 @router.message(Command("setsticker"))
-async def cmd_setsticker(message: Message, command: CommandObject, bot: Bot):
-    allowed, group_id = await can_edit(message, bot)
-    if not allowed:
+async def cmd_setsticker(message: Message, command: CommandObject, bot: Bot, db: Database, config: Config):
+    group_id = await editable_group_id(message, bot, config)
+    if group_id is None:
         await message.answer("⛔ Stikerni faqat guruh adminlari o'zgartira oladi.")
         return
 

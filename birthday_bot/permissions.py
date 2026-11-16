@@ -4,7 +4,6 @@ foydalanuvchi adminligini tekshirish.
 """
 
 import logging
-import os
 from typing import Optional
 
 from aiogram import Bot
@@ -12,53 +11,40 @@ from aiogram.enums import ChatMemberStatus, ChatType
 from aiogram.exceptions import TelegramAPIError
 from aiogram.types import Chat, Message
 
+from birthday_bot.config import Config
+
 logger = logging.getLogger(__name__)
 
 ADMIN_STATUSES = {ChatMemberStatus.CREATOR, ChatMemberStatus.ADMINISTRATOR}
 
 
-def get_default_group_id() -> Optional[int]:
-    value = os.getenv("DEFAULT_GROUP_ID")
-    if not value:
-        return None
-    try:
-        return int(value)
-    except ValueError:
-        logger.warning("DEFAULT_GROUP_ID noto'g'ri: %r", value)
-        return None
-
-
-def get_target_group_id(chat: Chat) -> int:
-    """
-    Agar shaxsiy chat bo'lsa va DEFAULT_GROUP_ID mavjud bo'lsa, o'sha guruh
-    ID'sini qaytaradi. Aks holda shu chat ID'sini qaytaradi.
-    """
-    default_gid = get_default_group_id()
-    if chat.type == ChatType.PRIVATE and default_gid:
-        return default_gid
+def target_group_id(chat: Chat, config: Config) -> int:
+    """Shaxsiy chatda DEFAULT_GROUP_ID (agar bor bo'lsa), aks holda shu chat ID'si."""
+    if chat.type == ChatType.PRIVATE and config.default_group_id:
+        return config.default_group_id
     return chat.id
 
 
-async def can_edit(message: Message, bot: Bot) -> tuple[bool, Optional[int]]:
+async def editable_group_id(message: Message, bot: Bot, config: Config) -> Optional[int]:
     """
-    Foydalanuvchi yozuvlarni/sozlamalarni o'zgartira oladimi? (ruxsat, guruh_id).
+    Foydalanuvchi o'zgartira oladigan guruh ID'si, ruxsat bo'lmasa None.
     Guruhda — shu guruh admini; shaxsiy chatda — DEFAULT_GROUP_ID guruhining admini.
     """
     if message.chat.type == ChatType.PRIVATE:
-        group_id = get_default_group_id()
+        group_id = config.default_group_id
         if group_id is None:
-            return False, None
+            return None
     else:
         group_id = message.chat.id
         # Anonim admin guruh nomidan yozadi
         if message.sender_chat and message.sender_chat.id == group_id:
-            return True, group_id
+            return group_id
 
     if message.from_user is None:
-        return False, group_id
+        return None
     try:
         member = await bot.get_chat_member(group_id, message.from_user.id)
     except TelegramAPIError as exc:
         logger.warning("Adminlikni tekshirib bo'lmadi (guruh=%s): %s", group_id, exc)
-        return False, group_id
-    return member.status in ADMIN_STATUSES, group_id
+        return None
+    return group_id if member.status in ADMIN_STATUSES else None

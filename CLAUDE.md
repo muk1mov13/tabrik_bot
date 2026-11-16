@@ -4,32 +4,31 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-Telegram bot (aiogram 3.x + APScheduler + PostgreSQL via asyncpg) that stores people's birthdays per Telegram group and posts a greeting to the group once on the day. All user-facing text, comments and docstrings are in Uzbek (Latin script) — keep new strings and comments consistent with that.
+Telegram bot (aiogram 3.x + APScheduler + SQLite via aiosqlite) that stores birthdays per Telegram group, greets the person in the group once on the day, and optionally reminds N days ahead. All user-facing text, comments and docstrings are in Uzbek (Latin script) — keep new strings and comments consistent with that.
 
 ## Commands
 
 ```bash
-pip install -r requirements-dev.txt   # runtime deps + pytest
-python bot.py                         # reads .env via python-dotenv (see .env.example)
-pytest                                # all tests (pytest.ini sets pythonpath=.)
-pytest tests/test_utils.py::test_calc_age   # single test
+pip install -r requirements-dev.txt          # runtime deps + pytest, pytest-asyncio
+python -m birthday_bot                       # run; reads .env (see .env.example)
+pytest                                       # all tests (asyncio_mode=auto in pytest.ini)
+pytest tests/test_database.py::test_crud     # single test
 ```
 
-No Docker. Production runs on Ubuntu as a systemd service (`deploy/birthdate-bot.service`, instructions in `deploy/DEPLOY.md`); logs via `journalctl -u birthdate-bot`.
+No Docker. Production runs on Ubuntu as a systemd service (`deploy/birthdate-bot.service`, steps in `deploy/DEPLOY.md`); the unit uses `ProtectSystem=strict`, so the bot can only write to `/opt/birthdate-bot/data`.
 
-## Configuration (env vars)
-
-`BOT_TOKEN`, `DATABASE_URL` (required); `DEFAULT_GROUP_ID`, `NOTIFICATION_TIME` (HH:MM, default 08:00), `TIMEZONE` (default Asia/Tashkent). `DEFAULT_GROUP_ID` makes commands in a private chat operate on that group.
+Env vars: `BOT_TOKEN` (required), `DATABASE_PATH` (default `data/birthdays.db`), `DEFAULT_GROUP_ID`, `NOTIFICATION_TIME` (HH:MM default for groups without their own), `TIMEZONE` (default Asia/Tashkent). `config.load_config()` validates them and raises `ConfigError` at startup.
 
 ## Architecture
 
-Flat module layout, no packages:
+Package `birthday_bot/`:
 
-- `bot.py` — entry point: `db.init_db()` → `Bot`/`Dispatcher` (HTML parse mode) → `handlers.router` + `group_settings.router` → `setup_scheduler(bot)` → long polling; shuts everything down in `finally`.
-- `utils.py` — shared, DB-free logic: `TZ`/`now()`/`today()` (always use these, never `date.today()` — server runs in UTC), `MONTH_NAMES`, `ADD_ARGS_PATTERN` (name is optional), `validate_date`, `parse_time`, `mention()` (escapes the name; links to `tg://user?id=` when a Telegram user is attached), Feb-29 handling (`birthday_in_year`, `next_birthday`, `birthday_keys_for`).
-- `permissions.py` — `get_target_group_id(chat)` (private chat → `DEFAULT_GROUP_ID`) and `can_edit(message, bot)` admin check used by every mutating command.
-- `database.py` — module-level asyncpg pool via `get_pool()`. No migration system: schema changes go into `init_db()` and must be idempotent (`ADD COLUMN IF NOT EXISTS`, etc.). Tables: `birthdays(..., user_id, last_notified, last_reminded)` and `group_settings(group_id PK, notify_time, remind_days, upcoming_days, sticker_file_id)`. A group with no settings row uses `DEFAULT_SETTINGS`; `set_setting` upserts one whitelisted column.
-- `handlers.py` — birthday commands (`/add`, `/edit`, `/list` with `ListPage` callback pagination, `/find`, `/upcoming`, `/remove`) and supergroup migration (`migrate_to_chat_id`). `group_settings.py` — `/settings`, `/setsticker`. Command args come from `CommandObject.args` so `/cmd@BotName` works. All user-supplied text must go through `escape`/`mention` because parse mode is HTML.
-- `scheduler.py` — a single job runs every minute (and once at startup). It sends greetings for groups whose `notify_time` has passed and reminders `remind_days` ahead. `last_notified` / `last_reminded` are set only after a successful send, so each one goes out at most once per day, including across restarts. `update_birthday` clears both marks.
+- **Dependency injection, no globals.** `__main__.py` builds `Config` and `Database` and passes them as `Dispatcher(db=..., config=...)` workflow data, so handlers declare `db: Database, config: Config` parameters. The scheduler gets them explicitly. To add a handler, put it in a router under `handlers/` (`common`, `birthdays`, `settings`); `handlers.build_router()` combines the routers.
+- **Pure logic is separate from aiogram/DB:** `dates.py` (all functions take "today" as a parameter; get the current time only through `dates.now(config.timezone)`, never `date.today()`, because servers run in UTC), `parsing.py` (raises `ParseError`), `texts.py` (all messages; user input must go through `mention()`/`escape()` because parse mode is HTML), `models.py` (frozen dataclasses + limits).
+- **`database.py`** wraps one aiosqlite connection (autocommit, WAL). Schema is versioned via `PRAGMA user_version`: to change it, **append** a script to `MIGRATIONS`, never edit existing ones. Dates are stored as ISO `YYYY-MM-DD` text and times as `HH:MM`, so SQL string comparison works. Feb-29 handling lives in `dates.birthday_keys_for` (non-leap Feb 28 also matches 29.02).
+- **`scheduler.py`** runs `check_and_notify` every minute (and once at startup). It sends greetings for groups whose `notify_time` has passed, and reminders `remind_days` ahead. `last_notified`/`last_reminded` are set only after a successful send, which makes it idempotent across minutes and restarts. `update_birthday` clears both marks.
+- **`permissions.py`**: `target_group_id` (a private chat maps to `DEFAULT_GROUP_ID`) and `editable_group_id` (admin check via `get_chat_member`; returns `None` when not allowed). It is used by every mutating command.
 
-Tests (`tests/`) cover pure logic only (utils, arg parsing, message builders); SQL in `database.py` is not covered by tests.
+## Tests
+
+`tests/conftest.py` provides an in-memory `db` fixture. `tests/test_handlers.py` drives real handlers through a module-level `Dispatcher` with a `MockSession` that fakes Telegram API responses (`GetMe`, `GetChatMember` — user id 1 is admin, 2 is a member — and `SendMessage`). Routers are module singletons, so don't call `build_router()` twice in one process.

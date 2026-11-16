@@ -1,6 +1,6 @@
 [Unit]
 Description=Birthdate Telegram bot
-After=network-online.target postgresql.service
+After=network-online.target
 Wants=network-online.target
 
 [Service]
@@ -9,11 +9,12 @@ User=botuser
 Group=botuser
 WorkingDirectory=/opt/birthdate-bot
 EnvironmentFile=/opt/birthdate-bot/.env
-ExecStart=/opt/birthdate-bot/venv/bin/python bot.py
+ExecStart=/opt/birthdate-bot/venv/bin/python -m birthday_bot
 Restart=always
 RestartSec=5
 NoNewPrivileges=true
-ProtectSystem=full
+ProtectSystem=strict
+ReadWritePaths=/opt/birthdate-bot/data
 PrivateTmp=true
 
 [Install]

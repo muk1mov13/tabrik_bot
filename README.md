@@ -1,9 +1,10 @@
 # 🎂 Tug'ilgan kun eslatuvchi Telegram bot
 
-aiogram 3.x + APScheduler + PostgreSQL (asyncpg) asosida qurilgan bot. Guruh
-a'zolarining tug'ilgan kunlarini saqlaydi va har kuni belgilangan vaqtda
-(default 08:00, Toshkent vaqti) tug'ilgan kuni bor odamni guruhda bir marta
-tabriklaydi.
+aiogram 3.x + APScheduler + SQLite asosida qurilgan bot. Guruh a'zolarining
+tug'ilgan kunlarini saqlaydi, har kuni belgilangan vaqtda (default 08:00,
+Toshkent vaqti) tug'ilgan kuni bor odamni guruhda bir marta tabriklaydi va
+xohlasangiz bir necha kun oldin eslatib qo'yadi. Alohida baza serveri kerak
+emas — ma'lumotlar bitta faylda saqlanadi.
 
 ## O'rnatish (lokal)
 
@@ -11,12 +12,15 @@ tabriklaydi.
 python -m venv venv
 source venv/bin/activate        # Windows: venv\Scripts\activate
 pip install -r requirements.txt
-cp .env.example .env            # qiymatlarni to'ldiring
-python bot.py
+cp .env.example .env            # BOT_TOKEN ni yozing
+python -m birthday_bot
 ```
 
-`birthdays` jadvali bot birinchi marta ishga tushganda avtomatik yaratiladi —
-qo'lda migration kerak emas.
+Baza fayli (`data/birthdays.db`) va jadvallar birinchi ishga tushishda
+avtomatik yaratiladi.
+
+Botni guruhga qo'shing. Xabar yuborishi uchun admin qilish shart emas, lekin
+`/add` va `/remove` faqat guruh adminlariga ruxsat etilgan.
 
 Serverga joylash: [deploy/DEPLOY.md](deploy/DEPLOY.md) (Ubuntu + systemd).
 
@@ -25,7 +29,7 @@ Serverga joylash: [deploy/DEPLOY.md](deploy/DEPLOY.md) (Ubuntu + systemd).
 | O'zgaruvchi | Majburiy | Tavsif |
 |---|---|---|
 | `BOT_TOKEN` | ha | [@BotFather](https://t.me/BotFather) tokeni |
-| `DATABASE_URL` | ha | `postgresql://user:parol@localhost:5432/db` |
+| `DATABASE_PATH` | yo'q | SQLite fayli (default `data/birthdays.db`) |
 | `DEFAULT_GROUP_ID` | yo'q | Shaxsiy chatdan yozilgan buyruqlar shu guruhga tegishli bo'ladi |
 | `NOTIFICATION_TIME` | yo'q | Default tabrik vaqti, `HH:MM` (default `08:00`); guruhda `/settings time` bilan o'zgartiriladi |
 | `TIMEZONE` | yo'q | Vaqt mintaqasi (default `Asia/Tashkent`) |
@@ -59,15 +63,19 @@ belgilangan vaqtdan keyin ishga tushsa, o'tkazib yuborilganlari darhol ketadi.
 
 ```
 birthdate-bot/
-├── bot.py           # Asosiy kirish nuqtasi
-├── database.py      # PostgreSQL bilan ishlash
-├── handlers.py      # /add, /edit, /list, /find, /upcoming, /remove
-├── group_settings.py # /settings, /setsticker
-├── permissions.py   # Guruhni aniqlash va admin tekshiruvi
-├── scheduler.py     # Har daqiqalik tekshiruv: tabrik va oldindan eslatma
-├── utils.py         # Vaqt mintaqasi, sana tekshiruvi, umumiy konstantalar
-├── tests/           # pytest testlari
-└── deploy/          # systemd xizmati va deploy qo'llanmasi
+├── birthday_bot/
+│   ├── __main__.py      # Kirish nuqtasi: python -m birthday_bot
+│   ├── config.py        # .env dan sozlamalar
+│   ├── database.py      # SQLite: sxema, migratsiyalar, so'rovlar
+│   ├── models.py        # Birthday, GroupSettings, Upcoming
+│   ├── dates.py         # Sana/vaqt: validatsiya, 29-fevral, yosh
+│   ├── parsing.py       # /add va /edit argumentlari
+│   ├── texts.py         # Barcha xabar matnlari
+│   ├── permissions.py   # Guruhni aniqlash va admin tekshiruvi
+│   ├── scheduler.py     # Har daqiqalik tekshiruv: tabrik va eslatma
+│   └── handlers/        # common, birthdays, settings buyruqlari
+├── tests/               # pytest testlari
+└── deploy/              # systemd xizmati va deploy qo'llanmasi
 ```
 
 ## Testlar

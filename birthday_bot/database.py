@@ -1,0 +1,335 @@
+"""
+database.py — SQLite (aiosqlite) orqali tug'ilgan kunlar va guruh
+sozlamalarini saqlash.
+
+Sxema PRAGMA user_version bilan versiyalanadi: yangi o'zgarish kerak bo'lsa,
+MIGRATIONS ro'yxati oxiriga yangi skript qo'shiladi (eskilarini o'zgartirmang).
+Sanalar 'YYYY-MM-DD', vaqtlar 'HH:MM' matn ko'rinishida saqlanadi — bu
+formatlarda matnli taqqoslash xronologik taqqoslash bilan bir xil.
+"""
+
+from contextlib import asynccontextmanager
+from datetime import date, time, timedelta
+from pathlib import Path
+from typing import Any, Optional, Union
+
+import aiosqlite
+
+from birthday_bot.dates import birthday_keys_for, format_time, next_birthday, parse_time
+from birthday_bot.models import Birthday, GroupSettings, Upcoming
+
+MIGRATIONS = [
+    # 1 — boshlang'ich sxema
+    """
+    CREATE TABLE birthdays (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        group_id INTEGER NOT NULL,
+        name TEXT NOT NULL,
+        day INTEGER NOT NULL,
+        month INTEGER NOT NULL,
+        year INTEGER,
+        user_id INTEGER,
+        added_by INTEGER,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        last_notified TEXT,
+        last_reminded TEXT
+    );
+    CREATE INDEX birthdays_group_idx ON birthdays (group_id);
+    CREATE INDEX birthdays_date_idx ON birthdays (month, day);
+    CREATE TABLE group_settings (
+        group_id INTEGER PRIMARY KEY,
+        notify_time TEXT,
+        remind_days INTEGER NOT NULL DEFAULT 0,
+        upcoming_days INTEGER NOT NULL DEFAULT 7,
+        sticker_file_id TEXT
+    );
+    """,
+]
+
+SETTING_FIELDS = {"notify_time", "remind_days", "upcoming_days", "sticker_file_id"}
+
+
+def _to_birthday(row: aiosqlite.Row) -> Birthday:
+    return Birthday(
+        id=row["id"],
+        group_id=row["group_id"],
+        name=row["name"],
+        day=row["day"],
+        month=row["month"],
+        year=row["year"],
+        user_id=row["user_id"],
+    )
+
+
+def _date_condition(d: date) -> tuple[str, list[int]]:
+    """Shu sanada nishonlanadigan yozuvlar uchun WHERE sharti (29.02 ni hisobga olgan holda)."""
+    keys = birthday_keys_for(d)
+    condition = " OR ".join("(b.day = ? AND b.month = ?)" for _ in keys)
+    return f"({condition})", [value for key in keys for value in key]
+
+
+class Database:
+    def __init__(self, path: Union[str, Path], default_notify_time: time):
+        self._path = str(path)
+        self._default_time = format_time(default_notify_time)
+        self._conn: Optional[aiosqlite.Connection] = None
+
+    # ---------- Ulanish ----------
+
+    async def connect(self):
+        if self._path != ":memory:":
+            Path(self._path).parent.mkdir(parents=True, exist_ok=True)
+        # isolation_level=None — autocommit; ko'p qadamli o'zgarishlar _transaction() da
+        self._conn = await aiosqlite.connect(self._path, isolation_level=None)
+        self._conn.row_factory = aiosqlite.Row
+        await self._conn.execute("PRAGMA journal_mode = WAL")
+        await self._conn.execute("PRAGMA busy_timeout = 5000")
+        await self._migrate()
+
+    async def close(self):
+        if self._conn is not None:
+            await self._conn.close()
+            self._conn = None
+
+    @property
+    def conn(self) -> aiosqlite.Connection:
+        if self._conn is None:
+            raise RuntimeError("Baza ulanmagan. Avval connect() ni chaqiring.")
+        return self._conn
+
+    async def _migrate(self):
+        async with self.conn.execute("PRAGMA user_version") as cursor:
+            version = (await cursor.fetchone())[0]
+        for number, script in enumerate(MIGRATIONS[version:], start=version + 1):
+            await self.conn.executescript(
+                f"BEGIN; {script} PRAGMA user_version = {number}; COMMIT;"
+            )
+
+    @asynccontextmanager
+    async def _transaction(self):
+        await self.conn.execute("BEGIN")
+        try:
+            yield
+        except BaseException:
+            await self.conn.execute("ROLLBACK")
+            raise
+        await self.conn.execute("COMMIT")
+
+    async def _fetchall(self, query: str, params: tuple = ()) -> list[aiosqlite.Row]:
+        async with self.conn.execute(query, params) as cursor:
+            return list(await cursor.fetchall())
+
+    async def _fetchone(self, query: str, params: tuple = ()) -> Optional[aiosqlite.Row]:
+        async with self.conn.execute(query, params) as cursor:
+            return await cursor.fetchone()
+
+    async def _execute(self, query: str, params: tuple = ()) -> aiosqlite.Cursor:
+        cursor = await self.conn.execute(query, params)
+        await cursor.close()
+        return cursor
+
+    # ---------- Tug'ilgan kunlar ----------
+
+    async def add_birthday(
+        self,
+        group_id: int,
+        name: str,
+        day: int,
+        month: int,
+        year: Optional[int] = None,
+        added_by: Optional[int] = None,
+        user_id: Optional[int] = None,
+    ) -> int:
+        cursor = await self._execute(
+            """
+            INSERT INTO birthdays (group_id, name, day, month, year, added_by, user_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (group_id, name, day, month, year, added_by, user_id),
+        )
+        return cursor.lastrowid
+
+    async def get_birthday(self, group_id: int, record_id: int) -> Optional[Birthday]:
+        row = await self._fetchone(
+            "SELECT * FROM birthdays WHERE group_id = ? AND id = ?", (group_id, record_id)
+        )
+        return _to_birthday(row) if row else None
+
+    async def update_birthday(
+        self,
+        group_id: int,
+        record_id: int,
+        name: str,
+        day: int,
+        month: int,
+        year: Optional[int],
+    ) -> bool:
+        """Ism va sanani yangilaydi. Sana o'zgargani uchun yuborilgan belgilar tozalanadi."""
+        cursor = await self._execute(
+            """
+            UPDATE birthdays
+            SET name = ?, day = ?, month = ?, year = ?,
+                last_notified = NULL, last_reminded = NULL
+            WHERE group_id = ? AND id = ?
+            """,
+            (name, day, month, year, group_id, record_id),
+        )
+        return cursor.rowcount == 1
+
+    async def remove_birthday(self, group_id: int, record_id: int) -> bool:
+        cursor = await self._execute(
+            "DELETE FROM birthdays WHERE group_id = ? AND id = ?", (group_id, record_id)
+        )
+        return cursor.rowcount == 1
+
+    async def list_birthdays(
+        self, group_id: int, limit: Optional[int] = None, offset: int = 0
+    ) -> list[Birthday]:
+        rows = await self._fetchall(
+            """
+            SELECT * FROM birthdays
+            WHERE group_id = ?
+            ORDER BY month, day, name COLLATE NOCASE
+            LIMIT ? OFFSET ?
+            """,
+            (group_id, -1 if limit is None else limit, offset),
+        )
+        return [_to_birthday(row) for row in rows]
+
+    async def count_birthdays(self, group_id: int) -> int:
+        row = await self._fetchone(
+            "SELECT count(*) FROM birthdays WHERE group_id = ?", (group_id,)
+        )
+        return row[0]
+
+    async def find_birthdays(self, group_id: int, text: str, limit: int = 50) -> list[Birthday]:
+        # SQLite LIKE faqat lotin harflarida katta-kichikni farqlamaydi —
+        # kirill ismlar uchun ham ishlashi uchun Python'da qidiramiz
+        needle = text.casefold()
+        found = [b for b in await self.list_birthdays(group_id) if needle in b.name.casefold()]
+        return found[:limit]
+
+    async def get_upcoming(self, group_id: int, today: date, days_ahead: int) -> list[Upcoming]:
+        """Kelasi N kun ichidagi tug'ilgan kunlar, eng yaqini birinchi."""
+        result = []
+        for birthday in await self.list_birthdays(group_id):
+            bday = next_birthday(birthday.day, birthday.month, today)
+            days_left = (bday - today).days
+            if days_left <= days_ahead:
+                result.append(Upcoming(birthday=birthday, date=bday, days_left=days_left))
+        result.sort(key=lambda item: item.days_left)
+        return result
+
+    async def migrate_group(self, old_id: int, new_id: int):
+        """Guruh supergroupga aylanganda chat ID o'zgaradi — yozuvlarni ko'chiradi."""
+        async with self._transaction():
+            await self._execute(
+                "UPDATE birthdays SET group_id = ? WHERE group_id = ?", (new_id, old_id)
+            )
+            await self._execute(
+                "UPDATE OR IGNORE group_settings SET group_id = ? WHERE group_id = ?",
+                (new_id, old_id),
+            )
+
+    # ---------- Tabrik va eslatmalar ----------
+
+    async def get_pending_greetings(
+        self, on_date: date, at: time
+    ) -> list[tuple[Birthday, Optional[str]]]:
+        """
+        Shu sanada nishonlanadigan, guruh tabrik vaqti kelgan va hali tabrik
+        yuborilmagan yozuvlar — guruh stikeri bilan. Kabisa bo'lmagan yilda
+        29.02 lar 28.02 da qaytadi.
+        """
+        condition, params = _date_condition(on_date)
+        rows = await self._fetchall(
+            f"""
+            SELECT b.*, s.sticker_file_id
+            FROM birthdays b
+            LEFT JOIN group_settings s ON s.group_id = b.group_id
+            WHERE {condition}
+              AND b.last_notified IS NOT ?
+              AND COALESCE(s.notify_time, ?) <= ?
+            ORDER BY b.id
+            """,
+            (*params, on_date.isoformat(), self._default_time, format_time(at)),
+        )
+        return [(_to_birthday(row), row["sticker_file_id"]) for row in rows]
+
+    async def get_pending_reminders(self, on_date: date, at: time) -> list[Upcoming]:
+        """
+        Oldindan eslatma yoqilgan guruhlarda, remind_days kundan keyin tug'ilgan
+        kuni bo'ladigan va bugun hali eslatilmagan yozuvlar.
+        """
+        at_text = format_time(at)
+        remind_values = await self._fetchall(
+            """
+            SELECT DISTINCT remind_days FROM group_settings
+            WHERE remind_days > 0 AND COALESCE(notify_time, ?) <= ?
+            """,
+            (self._default_time, at_text),
+        )
+        result = []
+        for (remind_days,) in remind_values:
+            target = on_date + timedelta(days=remind_days)
+            condition, params = _date_condition(target)
+            rows = await self._fetchall(
+                f"""
+                SELECT b.* FROM birthdays b
+                JOIN group_settings s ON s.group_id = b.group_id
+                WHERE {condition}
+                  AND s.remind_days = ?
+                  AND COALESCE(s.notify_time, ?) <= ?
+                  AND b.last_reminded IS NOT ?
+                ORDER BY b.id
+                """,
+                (*params, remind_days, self._default_time, at_text, on_date.isoformat()),
+            )
+            result.extend(
+                Upcoming(birthday=_to_birthday(row), date=target, days_left=remind_days)
+                for row in rows
+            )
+        return result
+
+    async def mark_notified(self, record_id: int, on_date: date):
+        await self._execute(
+            "UPDATE birthdays SET last_notified = ? WHERE id = ?",
+            (on_date.isoformat(), record_id),
+        )
+
+    async def mark_reminded(self, record_id: int, on_date: date):
+        await self._execute(
+            "UPDATE birthdays SET last_reminded = ? WHERE id = ?",
+            (on_date.isoformat(), record_id),
+        )
+
+    # ---------- Guruh sozlamalari ----------
+
+    async def get_settings(self, group_id: int) -> GroupSettings:
+        """Guruh sozlamalari; saqlanmagan qiymatlar o'rniga default qaytariladi."""
+        row = await self._fetchone(
+            "SELECT * FROM group_settings WHERE group_id = ?", (group_id,)
+        )
+        default_time = parse_time(self._default_time)
+        if row is None:
+            return GroupSettings(notify_time=default_time)
+        return GroupSettings(
+            notify_time=parse_time(row["notify_time"]) if row["notify_time"] else default_time,
+            remind_days=row["remind_days"],
+            upcoming_days=row["upcoming_days"],
+            sticker_file_id=row["sticker_file_id"],
+        )
+
+    async def set_setting(self, group_id: int, field: str, value: Any):
+        if field not in SETTING_FIELDS:
+            raise ValueError(f"Noma'lum sozlama: {field}")
+        if isinstance(value, time):
+            value = format_time(value)
+        # field faqat oq ro'yxatdan — SQL ga qo'yish xavfsiz
+        await self._execute(
+            f"""
+            INSERT INTO group_settings (group_id, {field}) VALUES (?, ?)
+            ON CONFLICT (group_id) DO UPDATE SET {field} = excluded.{field}
+            """,
+            (group_id, value),
+        )
