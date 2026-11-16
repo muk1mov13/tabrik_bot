@@ -366,7 +366,7 @@ async def test_deep_link_admin_gets_menu(send, db):
     (reply,) = await send(f"/start g_{G}", chat_type="private")
     assert "Oila" in reply
     assert list(buttons(send.session.last_markup())) == [
-        "➕ Qo'shish", "📋 Ro'yxat", "⚙️ Sozlamalar", "👥 Boshqaruvchilar",
+        "➕ Qo'shish", "📋 Ro'yxat", "⚙️ Sozlamalar", "👥 Boshqaruvchilar", "📖 Yo'riqnoma",
     ]
     assert [g.group_id for g in await db.linked_groups(ADMIN)] == [G]
     # Keyingi safar havolasiz ham menyu ochiladi
@@ -384,7 +384,7 @@ async def test_deep_link_member_gets_own_menu(send, db):
     await db.upsert_group(G, "Oila")
     (reply,) = await send(f"/start g_{G}", from_id=MEMBER, chat_type="private")
     assert "Oila" in reply
-    assert list(buttons(send.session.last_markup())) == ["🎂 Tug'ilgan kunimni qo'shish"]
+    assert list(buttons(send.session.last_markup())) == ["🎂 Tug'ilgan kunimni qo'shish", "📖 Yo'riqnoma"]
     assert [g.group_id for g in await db.linked_groups(MEMBER)] == [G]
 
 
@@ -397,9 +397,24 @@ async def test_deep_link_outsider_rejected(send, db):
 
 async def test_start_without_groups_explains(send):
     (reply,) = await send("/start", chat_type="private")
+    assert "Qanday boshlanadi?" in reply
     assert "guruhingizga qo'shing" in reply
+    assert buttons(send.session.last_markup()) == {
+        "➕ Guruhga qo'shish": "https://t.me/MyBot?startgroup=true"
+    }
     (reply,) = await send("/start g_xyz", chat_type="private")
     assert "guruhingizga qo'shing" in reply
+
+
+async def test_guide_button_opens_guide_and_returns(send, db):
+    await db.upsert_group(G, "Oila")
+    await send(f"/start g_{G}", from_id=MEMBER, chat_type="private")
+    (reply,) = await send.click(buttons(send.session.last_markup())["📖 Yo'riqnoma"], from_id=MEMBER)
+    assert "Qanday boshlanadi?" in reply
+    kb = buttons(send.session.last_markup())
+    assert list(kb) == ["➕ Guruhga qo'shish", "🏠 Menyu"]
+    (reply,) = await send.click(kb["🏠 Menyu"], from_id=MEMBER)
+    assert "Oila" in reply
 
 
 async def test_many_groups_choose_and_switch(send, db):

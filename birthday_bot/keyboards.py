@@ -6,6 +6,7 @@ bosishda rol qayta tekshiriladi (handlers/ui.py: ensure_role).
 """
 
 from datetime import time
+from typing import Optional
 
 from aiogram.filters.callback_data import CallbackData
 from aiogram.types import (
@@ -30,7 +31,7 @@ PICK_LINK_REQUEST = 2
 
 
 class Menu(CallbackData, prefix="m"):
-    action: str  # home | add | list | settings | groups
+    action: str  # home | add | list | settings | groups | guide
     group_id: int
 
 
@@ -117,6 +118,15 @@ def group_invite_keyboard(bot_username: str, group_id: int) -> InlineKeyboardMar
     return _kb([InlineKeyboardButton(text="🎂 Tug'ilgan kun qo'shish", url=url)])
 
 
+def guide_keyboard(bot_username: str, group_id: Optional[int] = None) -> InlineKeyboardMarkup:
+    """Yo'riqnoma ostida: botni guruhga qo'shish va (menyudan ochilgan bo'lsa) orqaga."""
+    url = f"https://t.me/{bot_username}?startgroup=true"
+    return _kb(
+        [InlineKeyboardButton(text="➕ Guruhga qo'shish", url=url)],
+        [home_button(group_id)] if group_id is not None else [],
+    )
+
+
 def main_menu_keyboard(group_id: int, many_groups: bool) -> InlineKeyboardMarkup:
     rows = [
         [
@@ -130,6 +140,7 @@ def main_menu_keyboard(group_id: int, many_groups: bool) -> InlineKeyboardMarkup
     ]
     if many_groups:
         rows.append([_cb("🔄 Guruhni almashtirish", Menu(action="groups", group_id=group_id))])
+    rows.append([_cb("📖 Yo'riqnoma", Menu(action="guide", group_id=group_id))])
     return _kb(*rows)
 
 
@@ -143,6 +154,7 @@ def member_menu_keyboard(group_id: int, has_record: bool, many_groups: bool) -> 
         rows = [[_cb("🎂 Tug'ilgan kunimni qo'shish", SelfAction(action="add", group_id=group_id))]]
     if many_groups:
         rows.append([_cb("🔄 Guruhni almashtirish", Menu(action="groups", group_id=group_id))])
+    rows.append([_cb("📖 Yo'riqnoma", Menu(action="guide", group_id=group_id))])
     return _kb(*rows)
 
 

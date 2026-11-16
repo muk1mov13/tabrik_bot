@@ -88,13 +88,43 @@ OWN_DELETE_CONFIRM_TEXT = "🗑 Tug'ilgan kuningiz ro'yxatdan o'chirilsinmi?"
 # Callback alert — oddiy matn (HTML emas), 200 belgigacha
 NOT_ADMIN_ALERT = "⛔ Bu amal faqat guruh adminlari va boshqaruvchilariga ruxsat etilgan."
 STALE_TEXT = "Bu menyu eskirgan. /menu ni bosing."
-NO_GROUPS_TEXT = (
-    "Hali birorta guruhingiz ulanmagan.\n\n"
-    "1. Meni oila guruhingizga qo'shing.\n"
-    "2. Guruhda <b>🎂 Tug'ilgan kun qo'shish</b> tugmasini bosing "
-    "(tugma ko'rinmasa, guruhda /menu yozing).\n\n"
-    "Botni guruhga qo'shgan odam va guruh adminlari hamma tug'ilgan kunlarni "
-    "boshqaradi, qolganlar o'z tug'ilgan kunini qo'sha oladi."
+# /start — yo'riqnoma (guruhi yo'q foydalanuvchiga va menyudagi 📖 tugmasi)
+GUIDE_TEXT = (
+    "🎂 <b>Tug'ilgan kun eslatuvchi bot</b>\n\n"
+    "Guruhingizdagilarning tug'ilgan kunini eslab qolaman va o'sha kuni guruhda "
+    "tabriklayman. Oila, do'stlar, sinfdoshlar, ishxona — istalgan guruhga mos.\n\n"
+    "<b>Qanday boshlanadi?</b>\n"
+    "1️⃣ Meni guruhingizga qo'shing (pastdagi tugma). Admin qilish shart emas.\n"
+    "2️⃣ Guruhda <b>🎂 Tug'ilgan kun qo'shish</b> tugmasi chiqadi — uni bosing "
+    "(ko'rinmasa, guruhda /menu yozing).\n"
+    "3️⃣ Shu yerda, shaxsiy chatda menyu ochiladi — ism va sanani kiriting.\n\n"
+    "<b>Kim nima qila oladi?</b>\n"
+    "👑 Botni qo'shgan odam, guruh adminlari va ular tayinlagan boshqaruvchilar — "
+    "hamma tug'ilgan kunlarni qo'shadi, o'zgartiradi va sozlaydi.\n"
+    "🙋 Guruhning boshqa a'zolari — o'z tug'ilgan kunini qo'shadi.\n\n"
+    "<b>Sana qanday yoziladi?</b>\n"
+    "<code>15.03</code>, <code>15.03.1998</code> yoki <code>15 mart 1998</code> — yili "
+    "ixtiyoriy. Bir nechta odamni birdaniga ham qo'shsa bo'ladi: har qatorga bittadan.\n\n"
+    "<b>Keyin nima bo'ladi?</b>\n"
+    "🎉 Tug'ilgan kun kuni belgilangan vaqtda guruhda tabriklayman\n"
+    "⏰ Xohlasangiz, bir necha kun oldin eslataman\n"
+    "🌅 Boshqaruvchilarga ertalab bugungi va ertangi tug'ilgan kunlarni yuboraman\n"
+    "⚙️ Vaqt, eslatma va tabrik matni — menyudagi <b>Sozlamalar</b>da\n\n"
+    "Barcha buyruqlar: /help"
+)
+# "What can this bot do?" (512 belgigacha) va profildagi qisqa tavsif (120 belgigacha)
+BOT_DESCRIPTION = (
+    "🎂 Guruhingizdagilarning tug'ilgan kunini eslab qolaman va o'sha kuni guruhda "
+    "tabriklayman.\n\n"
+    "👨‍👩‍👧 Oila, do'stlar, sinfdoshlar, ishxona — istalgan guruh uchun\n"
+    "⏰ Oldindan eslatma va tabrik vaqtini sozlash\n"
+    "📋 Ro'yxat, qidiruv va yaqin tug'ilgan kunlar\n"
+    "✍️ O'z tabrik matningiz va stikeringiz\n\n"
+    "Boshlash uchun «Start» ni bosing 👇"
+)
+BOT_SHORT_DESCRIPTION = (
+    "🎂 Guruhdagilarning tug'ilgan kunini eslab, o'z vaqtida tabriklaydigan bot. "
+    "Yo'riqnoma: /start"
 )
 CHOOSE_GROUP_TEXT = "Qaysi guruh bilan ishlaymiz?"
 ASK_NAME_TEXT = (

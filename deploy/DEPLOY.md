@@ -60,6 +60,15 @@ Loglar:
 journalctl -u birthdate-bot -f
 ```
 
+## 5.1. Bot rasmi va tavsifi
+
+Tavsif ("What can this bot do?") va qisqa tavsifni bot har ishga tushganda o'zi
+o'rnatadi (`texts.BOT_DESCRIPTION`, `texts.BOT_SHORT_DESCRIPTION`).
+
+Rasmni Bot API orqali qo'yib bo'lmaydi — @BotFather da `/setuserpic` → botni
+tanlang → `deploy/avatar.png` ni yuboring. Rasmni qayta chizish:
+`python deploy/make_avatar.py` (Pillow kerak, serverda shart emas).
+
 ## 6. Yangilash
 
 ```bash

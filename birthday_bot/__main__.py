@@ -13,7 +13,7 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.exceptions import TelegramUnauthorizedError
 
-from birthday_bot.commands import set_bot_commands
+from birthday_bot.commands import set_bot_commands, set_bot_description
 from birthday_bot.config import ConfigError, load_config
 from birthday_bot.database import Database
 from birthday_bot.handlers import build_router
@@ -36,6 +36,7 @@ async def main():
 
     scheduler = setup_scheduler(bot, db, config)
     await set_bot_commands(bot)
+    await set_bot_description(bot)
 
     logger.info("Bot ishga tushdi. To'xtatish uchun Ctrl+C bosing.")
     try:

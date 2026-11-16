@@ -4,6 +4,7 @@ from birthday_bot.keyboards import (
     Menu,
     RecordAction,
     group_invite_keyboard,
+    guide_keyboard,
     main_menu_keyboard,
     records_keyboard,
     settings_keyboard,
@@ -26,11 +27,19 @@ def test_group_invite_keyboard():
     assert button.url == "https://t.me/MyBot?start=g_-100123"
 
 
+def test_guide_keyboard():
+    (button,) = flat(guide_keyboard("MyBot"))
+    assert button.url == "https://t.me/MyBot?startgroup=true"
+    add, home = flat(guide_keyboard("MyBot", G))
+    assert Menu.unpack(home.callback_data) == Menu(action="home", group_id=G)
+
+
 def test_main_menu_keyboard():
     assert "🔄 Guruhni almashtirish" not in texts(main_menu_keyboard(G, False))
     kb = main_menu_keyboard(G, True)
     assert texts(kb) == [
         "➕ Qo'shish", "📋 Ro'yxat", "⚙️ Sozlamalar", "👥 Boshqaruvchilar", "🔄 Guruhni almashtirish",
+        "📖 Yo'riqnoma",
     ]
     assert Menu.unpack(flat(kb)[0].callback_data) == Menu(action="add", group_id=G)
 

@@ -26,6 +26,7 @@ from birthday_bot.keyboards import (
     PickGroup,
     RemoveManager,
     groups_keyboard,
+    guide_keyboard,
     invite_keyboard,
     main_menu_keyboard,
     managers_keyboard,
@@ -38,8 +39,8 @@ from birthday_bot.texts import (
     CANCELLED_TEXT,
     CHOOSE_GROUP_TEXT,
     GROUP_UNAVAILABLE_TEXT,
+    GUIDE_TEXT,
     INVITE_INVALID_TEXT,
-    NO_GROUPS_TEXT,
     NOT_IN_GROUP_TEXT,
     invite_text,
     invite_used_text,
@@ -87,10 +88,10 @@ async def main_menu_view(
 async def start_view(
     bot: Bot, db: Database, config: Config, user_id: int
 ) -> tuple[str, Optional[InlineKeyboardMarkup]]:
-    """Guruh bitta bo'lsa — uning menyusi, bir nechta bo'lsa — tanlash."""
+    """Guruh yo'q bo'lsa — yo'riqnoma, bitta bo'lsa — uning menyusi, bir nechta bo'lsa — tanlash."""
     groups = await available_groups(bot, db, user_id)
     if not groups:
-        return NO_GROUPS_TEXT, None
+        return GUIDE_TEXT, guide_keyboard((await bot.me()).username)
     if len(groups) == 1:
         group, role = groups[0]
         return await main_menu_view(db, config, user_id, group.group_id, role)
@@ -209,6 +210,12 @@ async def cb_home(
     if role is not None:
         text, keyboard = await main_menu_view(db, config, callback.from_user.id, group_id, role)
         await show(callback, text, keyboard)
+
+
+@router.callback_query(Menu.filter(F.action == "guide"))
+async def cb_guide(callback: CallbackQuery, callback_data: Menu, bot: Bot):
+    # Yo'riqnoma hamma uchun ochiq; 🏠 Menyu tugmasi rolni o'zi qayta tekshiradi
+    await show(callback, GUIDE_TEXT, guide_keyboard((await bot.me()).username, callback_data.group_id))
 
 
 @router.callback_query(Menu.filter(F.action == "groups"))

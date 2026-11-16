@@ -21,7 +21,7 @@ avtomatik yaratiladi.
 
 ## Qanday ishlatiladi
 
-1. Botni oila guruhiga qo'shing (admin qilish shart emas). Bot salomlashadi va
+1. Botni guruhga qo'shing (oila, do'stlar, ishxona — istalgan) (admin qilish shart emas). Bot salomlashadi va
    **🎂 Tug'ilgan kun qo'shish** tugmasini yuboradi.
 2. Tugmani bosing — botning shaxsiy chati ochiladi. Botni qo'shgan odam
    **boshqaruvchi** bo'ladi: unda **➕ Qo'shish**, **📋 Ro'yxat**, **⚙️ Sozlamalar** va
