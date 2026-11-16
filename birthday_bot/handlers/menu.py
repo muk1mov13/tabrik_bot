@@ -46,6 +46,9 @@ from birthday_bot.texts import (
 router = Router(name="menu")
 router.message.filter(F.chat.type == ChatType.PRIVATE)
 
+# Boshqaruvchi menyusida: yaqin 30 kundagi eng yaqin 3 ta tug'ilgan kun
+UPCOMING_IN_MENU, UPCOMING_IN_MENU_DAYS = 3, 30
+
 
 async def available_groups(bot: Bot, db: Database, user_id: int) -> list[tuple[Group, Role]]:
     """Foydalanuvchi hozir ham a'zosi bo'lgan bog'langan guruhlar va undagi roli."""
@@ -65,11 +68,13 @@ async def main_menu_view(
     group = await db.get_group(group_id)
     title = group.title if group else ""
     many_groups = len(await db.linked_groups(user_id)) > 1
+    today = now(config.timezone).date()
     if role >= Role.MANAGER:
-        return menu_text(title), main_menu_keyboard(group_id, many_groups)
+        upcoming = (await db.get_upcoming(group_id, today, UPCOMING_IN_MENU_DAYS))[:UPCOMING_IN_MENU]
+        return menu_text(title, upcoming), main_menu_keyboard(group_id, many_groups)
     own = await db.get_birthday_by_user(group_id, user_id)
     return (
-        member_menu_text(title, own, now(config.timezone).date()),
+        member_menu_text(title, own, today),
         member_menu_keyboard(group_id, own is not None, many_groups),
     )
 

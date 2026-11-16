@@ -197,8 +197,11 @@ def settings_text(s: GroupSettings) -> str:
     )
 
 
-def menu_text(title: str) -> str:
-    return f"🏠 <b>{escape(title) or 'Guruh'}</b>\n\nNima qilamiz?"
+def menu_text(title: str, upcoming: Sequence[Upcoming] = ()) -> str:
+    text = f"🏠 <b>{escape(title) or 'Guruh'}</b>\n\n"
+    if upcoming:
+        text += "🔔 <b>Yaqin kunlarda:</b>\n" + "\n".join(upcoming_line(u) for u in upcoming) + "\n\n"
+    return text + "Nima qilamiz?"
 
 
 def member_menu_text(title: str, own: Optional[Birthday], today: date) -> str:

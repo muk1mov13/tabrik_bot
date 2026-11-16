@@ -3,7 +3,7 @@ Handlerlarni Dispatcher orqali soxta Telegram sessiyasi bilan tekshirish:
 buyruqlar parse qilinadi, admin tekshiruvi ishlaydi, javoblar yuboriladi.
 """
 
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 from itertools import count
 from pathlib import Path
 from typing import Optional
@@ -731,3 +731,12 @@ async def test_add_flow_bulk_all_invalid_stays_on_name(send, db):
     assert "Tushunilmadi (2 ta)" in reply
     accepted, question = await send("Karim", chat_type="private")
     assert "Sanasi?" in question
+
+
+async def test_manager_menu_shows_upcoming(send, db, config):
+    await admin_in_group(db)
+    today = datetime.now(config.timezone).date()
+    soon = today + timedelta(days=2)
+    await db.add_birthday(G, "Karim aka", soon.day, soon.month)
+    (reply,) = await send("/menu", chat_type="private")
+    assert "Yaqin kunlarda" in reply and "Karim aka" in reply

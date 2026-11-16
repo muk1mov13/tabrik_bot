@@ -104,3 +104,10 @@ def test_greetings_use_respectful_plural():
     item = Upcoming(birthday=make(year=1960, day=4), date=date(2026, 5, 4), days_left=3)
     text = reminder(item)
     assert "tug'ilgan kunlari" in text and "yoshga to'ladilar" in text
+
+
+def test_menu_text_shows_upcoming():
+    soon = Upcoming(birthday=make(name="Karim aka", day=19, month=11), date=date(2026, 11, 19), days_left=3)
+    text = menu_text("Oila", [soon])
+    assert "Yaqin kunlarda" in text and "Karim aka" in text and "3 kundan keyin" in text
+    assert "Yaqin kunlarda" not in menu_text("Oila")
