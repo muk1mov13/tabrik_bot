@@ -8,7 +8,7 @@ mention() yoki escape() orqali o'tishi shart.
 import random
 from datetime import date
 from html import escape
-from typing import Optional
+from typing import Optional, Sequence
 
 from birthday_bot.dates import calc_age, format_time, next_birthday
 from birthday_bot.models import MAX_REMIND_DAYS, MAX_UPCOMING_DAYS, Birthday, GroupSettings, Upcoming
@@ -208,10 +208,16 @@ def name_accepted_text(name: str, user_id: Optional[int] = None) -> str:
     return f"👤 <b>{mention(name, user_id)}</b>"
 
 
-def add_preview(name: str, day: int, month: int, year: Optional[int]) -> str:
-    return (
-        f"Tekshiring:\n<b>{escape(name)}</b> — {format_date(day, month, year)}\n\nSaqlaymizmi?"
+def add_preview(
+    name: str, day: int, month: int, year: Optional[int], duplicates: Sequence[Birthday] = ()
+) -> str:
+    text = f"Tekshiring:\n<b>{escape(name)}</b> — {format_date(day, month, year)}\n\n"
+    if not duplicates:
+        return text + "Saqlaymizmi?"
+    existing = ", ".join(
+        f"{mention(b.name, b.user_id)} — {format_date(b.day, b.month, b.year)}" for b in duplicates
     )
+    return text + f"⚠️ Ro'yxatda allaqachon bor: {existing}. Baribir saqlaymizmi?"
 
 
 def added_text(name: str, day: int, month: int, year: Optional[int]) -> str:

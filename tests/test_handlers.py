@@ -651,3 +651,20 @@ async def test_add_flow_pick_telegram_user(send, db):
     await send.click(SaveNew().pack())
     (b,) = await db.list_birthdays(G)
     assert (b.name, b.user_id) == ("Sardor Aka", 77)
+
+
+async def test_add_flow_warns_about_duplicate(send, db):
+    await admin_in_group(db)
+    await db.add_birthday(G, "Karim aka", 1, 2)
+    await send.click(Menu(action="add", group_id=G).pack())
+    await send("karim  AKA", chat_type="private")
+    (reply,) = await send("15.03", chat_type="private")
+    assert "allaqachon bor" in reply and "1 Fevral" in reply
+
+
+async def test_member_warned_about_unlinked_record_with_same_name(send, db):
+    await db.upsert_group(G, "Oila")
+    await db.add_birthday(G, "User", 1, 2)  # admin ism bilan qo'shgan, belgilanmagan
+    await send.click(SelfAction(action="add", group_id=G).pack(), from_id=MEMBER)
+    (reply,) = await send("15.03", from_id=MEMBER, chat_type="private")
+    assert "allaqachon bor" in reply

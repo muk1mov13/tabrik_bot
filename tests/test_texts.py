@@ -83,3 +83,10 @@ def test_settings_menu_text():
     text = settings_menu_text(GroupSettings(notify_time=time(9, 0), remind_days=3))
     assert "09:00" in text and "3 kun oldin" in text
     assert "o'chirilgan" in settings_menu_text(GroupSettings(notify_time=time(9, 0)))
+
+
+def test_add_preview_warns_about_duplicates():
+    existing = make(name="Karim aka", day=1, month=2, year=None)
+    text = add_preview("Karim aka", 15, 3, None, [existing])
+    assert "⚠️ Ro'yxatda allaqachon bor" in text and "1 Fevral" in text
+    assert "Baribir saqlaymizmi?" in text

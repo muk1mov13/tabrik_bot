@@ -84,20 +84,26 @@ async def got_shared_user(message: Message, state: FSMContext):
 
 
 @router.message(AddBirthday.date, TEXT_INPUT)
-async def got_date(message: Message, state: FSMContext, config: Config):
+async def got_date(message: Message, state: FSMContext, db: Database, config: Config):
     data = await state.get_data()
+    group_id = data["group_id"]
     try:
         parsed = parse_date(message.text, now(config.timezone).date())
     except ParseError as exc:
-        await message.answer(
-            f"❗ {exc}\n\n{ASK_DATE_TEXT}", reply_markup=cancel_keyboard(data["group_id"])
-        )
+        await message.answer(f"❗ {exc}\n\n{ASK_DATE_TEXT}", reply_markup=cancel_keyboard(group_id))
         return
     await state.update_data(day=parsed.day, month=parsed.month, year=parsed.year)
     await state.set_state(AddBirthday.confirm)
+
+    # Takror yozuv: bir xil ism yoki o'sha Telegram foydalanuvchisi allaqachon bor
+    duplicates = await db.find_same_name(group_id, data["name"])
+    if data.get("user_id"):
+        linked = await db.get_birthday_by_user(group_id, data["user_id"])
+        if linked and linked not in duplicates:
+            duplicates.append(linked)
     await message.answer(
-        add_preview(data["name"], parsed.day, parsed.month, parsed.year),
-        reply_markup=add_confirm_keyboard(data["group_id"]),
+        add_preview(data["name"], parsed.day, parsed.month, parsed.year, duplicates),
+        reply_markup=add_confirm_keyboard(group_id),
     )
 
 

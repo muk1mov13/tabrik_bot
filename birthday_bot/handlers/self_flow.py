@@ -62,7 +62,7 @@ async def cb_self_date(
 
 
 @router.message(SelfBirthday.date, TEXT_INPUT)
-async def got_own_date(message: Message, state: FSMContext, config: Config):
+async def got_own_date(message: Message, state: FSMContext, db: Database, config: Config):
     group_id = (await state.get_data())["group_id"]
     try:
         parsed = parse_date(message.text, now(config.timezone).date())
@@ -72,8 +72,14 @@ async def got_own_date(message: Message, state: FSMContext, config: Config):
     name = message.from_user.full_name[:MAX_NAME_LENGTH]
     await state.update_data(name=name, day=parsed.day, month=parsed.month, year=parsed.year)
     await state.set_state(SelfBirthday.confirm)
+
+    # Yozuvi bor bo'lsa — bu o'zgartirish; yo'q bo'lsa, admin uni ism bilan
+    # (belgilamasdan) qo'shgan bo'lishi mumkin
+    duplicates = []
+    if await db.get_birthday_by_user(group_id, message.from_user.id) is None:
+        duplicates = [b for b in await db.find_same_name(group_id, name) if b.user_id is None]
     await message.answer(
-        add_preview(name, parsed.day, parsed.month, parsed.year),
+        add_preview(name, parsed.day, parsed.month, parsed.year, duplicates),
         reply_markup=self_confirm_keyboard(group_id),
     )
 
