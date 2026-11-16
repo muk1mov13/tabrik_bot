@@ -91,7 +91,9 @@ async def check_and_notify(
     on_date, at = current.date(), current.time().replace(second=0, microsecond=0)
 
     for birthday, sticker in await db.get_pending_greetings(on_date, at):
-        error = await _send(bot, birthday.group_id, greeting(birthday, on_date), sticker)
+        template = (await db.get_settings(birthday.group_id)).greeting_template
+        text = greeting(birthday, on_date, template=template)
+        error = await _send(bot, birthday.group_id, text, sticker)
         if error is None:
             await db.mark_notified(birthday.id, on_date)
             logger.info("Tabrik yuborildi: guruh=%s, id=%s", birthday.group_id, birthday.id)

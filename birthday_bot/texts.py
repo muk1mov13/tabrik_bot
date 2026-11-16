@@ -115,6 +115,15 @@ ASK_NEW_NAME_TEXT ="Yangi ismni yozing:"
 ASK_NEW_DATE_TEXT = "Yangi sanani yozing: <code>15.03</code> yoki <code>15.03.1980</code>"
 ASK_TIME_TEXT = "Tabrik vaqtini yozing, masalan <code>09:30</code>"
 EMPTY_LIST_TEXT = "Hali hech kim qo'shilmagan."
+ASK_GREETING_TEXT = (
+    "✍️ Tabrik matnini yozing. Odamning ismi qo'yiladigan joyga <code>{ism}</code> yozing.\n\n"
+    "Masalan:\n<code>🎉 Bugun {ism}ning tavallud ayyomlari! Chin dildan tabriklaymiz, "
+    "sog'liq va baxt tilaymiz!</code>\n\n"
+    "Yili kiritilgan bo'lsa, yosh haqidagi qator o'zi qo'shiladi."
+)
+ASK_STICKER_TEXT = "🎨 Tabrikdan keyin yuboriladigan stikerni yuboring:"
+NOT_A_STICKER_TEXT = "❗ Bu stiker emas. Stikerni yuboring yoki bekor qiling."
+PREVIEW_HEADER = "👁 Tabrik guruhda shunday ko'rinadi:"
 ASK_LINK_TEXT = (
     "👤 Bu yozuv kimga tegishli? Pastdagi tugma bilan odamni Telegram'dan tanlang — "
     "shunda tabrikda u belgilanadi."
@@ -196,8 +205,16 @@ def upcoming_line(item: Upcoming) -> str:
     return f"• {mention(b.name, b.user_id)} — {format_date(item.date.day, item.date.month)} ({when})"
 
 
-def greeting(b: Birthday, on_date: date, rng: random.Random = random) -> str:
-    text = rng.choice(GREETINGS).format(name=f"<b>{mention(b.name, b.user_id)}</b>")
+def greeting(
+    b: Birthday, on_date: date, rng: random.Random = random, template: Optional[str] = None
+) -> str:
+    """Tabrik: guruhning o'z matni ({ism} o'rniga ism) yoki standart matnlardan biri."""
+    name = f"<b>{mention(b.name, b.user_id)}</b>"
+    if template:
+        # Boshqaruvchi yozgan matn ham HTML sifatida o'qilmaydi
+        text = escape(template, quote=False).replace("{ism}", name)
+    else:
+        text = rng.choice(GREETINGS).format(name=name)
     if b.year:
         text += f"\n🎊 Bugun {calc_age(b.year, on_date)} yoshga to'ldilar!"
     return text
@@ -372,11 +389,15 @@ def confirm_delete_text(b: Birthday) -> str:
 
 def settings_menu_text(s: GroupSettings) -> str:
     remind = f"{s.remind_days} kun oldin" if s.remind_days else "o'chirilgan"
+    template = "o'zingizniki" if s.greeting_template else "standart"
+    sticker = "bor" if s.sticker_file_id else "yo'q"
     return (
         "⚙️ <b>Sozlamalar</b>\n\n"
         f"🕗 Tabrik vaqti: <b>{format_time(s.notify_time)}</b>\n"
-        f"⏰ Oldindan eslatma: <b>{remind}</b>\n\n"
-        "Yuqorida — tabrik vaqti, pastda — necha kun oldin eslatish."
+        f"⏰ Oldindan eslatma: <b>{remind}</b>\n"
+        f"✍️ Tabrik matni: <b>{template}</b>\n"
+        f"🎨 Stiker: <b>{sticker}</b>\n\n"
+        "Yuqorida — tabrik vaqti, keyin — necha kun oldin eslatish va tabrik ko'rinishi."
     )
 
 

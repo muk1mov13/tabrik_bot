@@ -9,6 +9,7 @@ from birthday_bot.parsing import (
     parse_bulk,
     parse_date,
     parse_edit,
+    parse_greeting_template,
     parse_group_payload,
     parse_invite_payload,
     parse_name,
@@ -115,3 +116,11 @@ def test_parse_invite_payload():
     assert parse_invite_payload("m_AbC-d_12345") == "AbC-d_12345"
     for bad in ["m_", "m_short", "g_-100", "m_bad token!", ""]:
         assert parse_invite_payload(bad) is None
+
+
+def test_parse_greeting_template():
+    assert parse_greeting_template("  Tabriklaymiz, {ism}!  ") == "Tabriklaymiz, {ism}!"
+    with pytest.raises(ParseError, match="{ism}"):
+        parse_greeting_template("Tabriklaymiz!")
+    with pytest.raises(ParseError, match="500"):
+        parse_greeting_template("{ism} " + "a" * 500)

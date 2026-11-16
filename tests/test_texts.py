@@ -123,3 +123,9 @@ def test_export_text_round_trips_through_bulk_parser():
     assert [(e.name, e.day, e.month, e.year) for e in parsed.entries] == [
         ("Adolatxon", 27, 5, 2021), ("Ali aka", 1, 12, None),
     ]
+
+
+def test_greeting_with_custom_template():
+    text = greeting(make(name="Ali <3", year=2000), date(2026, 5, 1), template="<i>{ism}</i>ni tabriklaymiz!")
+    assert text.startswith("&lt;i&gt;<b>Ali &lt;3</b>&lt;/i&gt;ni tabriklaymiz!")
+    assert "26 yoshga to'ldilar" in text

@@ -56,6 +56,7 @@ from birthday_bot.keyboards import (
     SaveNew,
     SelfAction,
     SetRemind,
+    SettingsAction,
 )
 from birthday_bot.models import Group
 
@@ -829,3 +830,36 @@ async def test_member_cannot_create_invite(send, db):
     assert await send.click(CreateInvite(group_id=G).pack(), from_id=MEMBER) == []
     (reply,) = await send("/start m_notarealtoken1", from_id=MEMBER, chat_type="private")
     assert "eskirgan" in reply
+
+
+async def test_settings_custom_greeting_preview_and_reset(send, db):
+    await admin_in_group(db)
+    await send.click(Menu(action="settings", group_id=G).pack())
+    kb = buttons(send.session.last_markup())
+    (reply,) = await send.click(kb["✍️ Tabrik matni"])
+    assert "{ism}" in reply
+    (reply,) = await send("Tabriklaymiz!", chat_type="private")
+    assert "❗" in reply
+    (reply,) = await send("Muborak bo'lsin, {ism}!", chat_type="private")
+    assert "o'zingizniki" in reply
+    assert (await db.get_settings(G)).greeting_template == "Muborak bo'lsin, {ism}!"
+
+    texts = await send.click(buttons(send.session.last_markup())["👁 Ko'rish"])
+    assert any("Muborak bo'lsin, <b>Karim aka</b>!" in t for t in texts)
+
+    (reply,) = await send.click(buttons(send.session.last_markup())["↩️ Standart matn"])
+    assert (await db.get_settings(G)).greeting_template is None
+
+
+async def test_settings_sticker_via_menu(send, db):
+    await admin_in_group(db)
+    await send.click(SettingsAction(action="sticker", group_id=G).pack())
+    sticker = Sticker(
+        file_id="STK2", file_unique_id="u2", type="regular",
+        width=1, height=1, is_animated=False, is_video=False,
+    )
+    (reply,) = await send(None, sticker=sticker, chat_type="private")
+    assert "Stiker: <b>bor</b>" in reply
+    assert (await db.get_settings(G)).sticker_file_id == "STK2"
+    await send.click(buttons(send.session.last_markup())["🗑 Stikerni o'chirish"])
+    assert (await db.get_settings(G)).sticker_file_id is None

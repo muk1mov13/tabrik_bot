@@ -103,3 +103,11 @@ async def test_network_error_is_retried_without_alarming_managers(db):
     online = FakeBot()
     await check_and_notify(online, db, datetime(2026, 5, 1, 8, 1, tzinfo=TZ), failures)
     assert [chat for chat, _ in online.messages] == [G]
+
+
+async def test_custom_greeting_template_is_used(db):
+    await db.add_birthday(G, "Ali", 1, 5)
+    await db.set_setting(G, "greeting_template", "Muborak bo'lsin, {ism}!")
+    bot = FakeBot()
+    await check_and_notify(bot, db, datetime(2026, 5, 1, 8, 0, tzinfo=TZ))
+    assert bot.messages == [(G, "Muborak bo'lsin, <b>Ali</b>!")]

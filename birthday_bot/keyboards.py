@@ -77,6 +77,11 @@ class SetRemind(CallbackData, prefix="sr"):
     days: int
 
 
+class SettingsAction(CallbackData, prefix="sa"):
+    action: str  # greeting | preview | reset_greeting | sticker | del_sticker
+    group_id: int
+
+
 class RemoveManager(CallbackData, prefix="rm"):
     group_id: int
     user_id: int
@@ -273,9 +278,20 @@ def settings_keyboard(group_id: int, s: GroupSettings) -> InlineKeyboardMarkup:
             SetRemind(group_id=group_id, days=d))
         for d in REMIND_CHOICES
     ]
+    def act(action: str) -> SettingsAction:
+        return SettingsAction(action=action, group_id=group_id)
+
+    look = [_cb("✍️ Tabrik matni", act("greeting")), _cb("👁 Ko'rish", act("preview"))]
+    extras = [_cb("🎨 Stiker", act("sticker"))]
+    if s.greeting_template:
+        extras.append(_cb("↩️ Standart matn", act("reset_greeting")))
+    if s.sticker_file_id:
+        extras.append(_cb("🗑 Stikerni o'chirish", act("del_sticker")))
     return _kb(
         times[:3],
         [*times[3:], _cb(_mark(custom_label, custom), SetTime(group_id=group_id, minutes=CUSTOM_TIME))],
         remind,
+        look,
+        extras,
         [home_button(group_id)],
     )

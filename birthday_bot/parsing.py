@@ -144,6 +144,20 @@ def parse_edit(text: str, today: date) -> tuple[int, ParsedBirthday]:
     return int(match["id"]), parse_birthday(match["rest"], today)
 
 
+MAX_TEMPLATE_LENGTH = 500
+NAME_PLACEHOLDER = "{ism}"
+
+
+def parse_greeting_template(text: str) -> str:
+    """Guruhning o'z tabrik matni: {ism} — odamning ismi qo'yiladigan joy."""
+    template = text.strip()
+    if NAME_PLACEHOLDER not in template:
+        raise ParseError(f"Matnda {NAME_PLACEHOLDER} bo'lishi kerak — u yerga odamning ismi qo'yiladi.")
+    if len(template) > MAX_TEMPLATE_LENGTH:
+        raise ParseError(f"Matn {MAX_TEMPLATE_LENGTH} belgidan oshmasligi kerak.")
+    return template
+
+
 def parse_invite_payload(payload: str) -> Optional[str]:
     """/start dagi 'm_<token>' dan taklif tokeni, noto'g'ri bo'lsa None."""
     match = INVITE_PAYLOAD_PATTERN.match(payload.strip())
