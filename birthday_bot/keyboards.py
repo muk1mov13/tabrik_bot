@@ -82,6 +82,10 @@ class RemoveManager(CallbackData, prefix="rm"):
     user_id: int
 
 
+class CreateInvite(CallbackData, prefix="iv"):
+    group_id: int
+
+
 class SelfAction(CallbackData, prefix="me"):
     action: str  # add | date | save | del | delyes — faqat o'z yozuvi
     group_id: int
@@ -160,7 +164,15 @@ def managers_keyboard(
             [_cb(f"🗑 {name}", RemoveManager(group_id=group_id, user_id=user_id))]
             for user_id, name in managers
         ]
-    return _kb(*rows, [home_button(group_id)])
+    invite = [_cb("🔗 Taklif havolasi", CreateInvite(group_id=group_id))]
+    return _kb(*rows, invite, [home_button(group_id)])
+
+
+def invite_keyboard(group_id: int) -> InlineKeyboardMarkup:
+    return _kb([
+        _cb("⬅️ Orqaga", Menu(action="managers", group_id=group_id)),
+        home_button(group_id),
+    ])
 
 
 def groups_keyboard(groups: list[Group]) -> InlineKeyboardMarkup:

@@ -21,23 +21,28 @@ from birthday_bot.dates import now
 from birthday_bot.handlers.ui import ensure_role, show
 from birthday_bot.keyboards import (
     Cancel,
+    CreateInvite,
     Menu,
     PickGroup,
     RemoveManager,
     groups_keyboard,
+    invite_keyboard,
     main_menu_keyboard,
     managers_keyboard,
     member_menu_keyboard,
 )
 from birthday_bot.models import Group
-from birthday_bot.parsing import parse_group_payload
+from birthday_bot.parsing import parse_group_payload, parse_invite_payload
 from birthday_bot.permissions import Role, get_role, resolve_group
 from birthday_bot.texts import (
     CANCELLED_TEXT,
     CHOOSE_GROUP_TEXT,
     GROUP_UNAVAILABLE_TEXT,
+    INVITE_INVALID_TEXT,
     NO_GROUPS_TEXT,
     NOT_IN_GROUP_TEXT,
+    invite_text,
+    invite_used_text,
     managers_text,
     member_menu_text,
     menu_text,
@@ -97,6 +102,11 @@ async def cmd_start_link(
     message: Message, command: CommandObject, bot: Bot, db: Database, config: Config
 ):
     user_id = message.from_user.id
+    token = parse_invite_payload(command.args or "")
+    if token is not None:
+        await _accept_invite(message, bot, db, config, token)
+        return
+
     group_id = parse_group_payload(command.args or "")
     if group_id is None:
         text, keyboard = await start_view(bot, db, config, user_id)
@@ -124,6 +134,53 @@ async def cmd_start_link(
     await db.link_user(user_id, group_id)
     text, keyboard = await main_menu_view(db, config, user_id, group_id, role)
     await message.answer(text, reply_markup=keyboard)
+
+
+async def _accept_invite(message: Message, bot: Bot, db: Database, config: Config, token: str):
+    """Boshqaruvchi taklifi: avval guruh a'zoligi tekshiriladi, keyin havola ishlatiladi."""
+    user = message.from_user
+    today = now(config.timezone).date()
+    group_id = await db.peek_invite(token, today)
+    if group_id is None:
+        await message.answer(INVITE_INVALID_TEXT)
+        return
+    role = await get_role(bot, db, group_id, user.id)
+    if role == Role.NONE:
+        # Havola saqlanib qoladi — guruhga qo'shilgach qayta bosish mumkin
+        await message.answer(NOT_IN_GROUP_TEXT)
+        return
+
+    if role < Role.MANAGER:
+        used = await db.use_invite(token, user.id, today)
+        if used is None:  # shu orada boshqa odam ishlatib ulgurgan
+            await message.answer(INVITE_INVALID_TEXT)
+            return
+        _, created_by = used
+        await db.add_manager(group_id, user.id, added_by=created_by)
+        role = Role.MANAGER
+        if created_by and created_by != user.id:
+            group = await db.get_group(group_id)
+            title = group.title if group and group.title else str(group_id)
+            try:
+                await bot.send_message(created_by, invite_used_text(user.full_name, user.id, title))
+            except TelegramAPIError:
+                pass  # taklif qilgan botni bloklagan bo'lishi mumkin — muhim emas
+    await db.link_user(user.id, group_id)
+    text, keyboard = await main_menu_view(db, config, user.id, group_id, role)
+    await message.answer(text, reply_markup=keyboard)
+
+
+@router.callback_query(CreateInvite.filter())
+async def cb_create_invite(
+    callback: CallbackQuery, callback_data: CreateInvite, bot: Bot, db: Database, config: Config
+):
+    group_id = callback_data.group_id
+    if await ensure_role(callback, bot, db, group_id, Role.MANAGER) is None:
+        return
+    token = await db.create_invite(group_id, callback.from_user.id, now(config.timezone).date())
+    me = await bot.me()
+    url = f"https://t.me/{me.username}?start=m_{token}"
+    await show(callback, invite_text(url), invite_keyboard(group_id))
 
 
 @router.message(Command("start", "menu"))

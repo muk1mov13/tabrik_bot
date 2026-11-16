@@ -10,6 +10,7 @@ from birthday_bot.parsing import (
     parse_date,
     parse_edit,
     parse_group_payload,
+    parse_invite_payload,
     parse_name,
 )
 
@@ -108,3 +109,9 @@ def test_parse_bulk():
     assert [line for line, _ in result.errors] == ["Salimaxon 31 fevral 2025", "Faqat ism"]
     # Sanasiz qator ism bo'lishi kerak — bunda ism yo'q
     assert parse_bulk("27 may 2021", TODAY).errors[0][1] == "Ism ko'rsatilmagan."
+
+
+def test_parse_invite_payload():
+    assert parse_invite_payload("m_AbC-d_12345") == "AbC-d_12345"
+    for bad in ["m_", "m_short", "g_-100", "m_bad token!", ""]:
+        assert parse_invite_payload(bad) is None

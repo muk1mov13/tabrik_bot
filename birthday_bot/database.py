@@ -509,6 +509,17 @@ class Database:
         )
         return token
 
+    async def peek_invite(self, token: str, today: date) -> Optional[int]:
+        """Havola hali amal qiladigan bo'lsa — uning guruhi (havola ishlatilmaydi)."""
+        row = await self._fetchone(
+            """
+            SELECT group_id FROM manager_invites
+            WHERE token = ? AND used_by IS NULL AND created_at > ?
+            """,
+            (token, (today - INVITE_LIFETIME).isoformat()),
+        )
+        return row["group_id"] if row else None
+
     async def use_invite(
         self, token: str, user_id: int, today: date
     ) -> Optional[tuple[int, Optional[int]]]:

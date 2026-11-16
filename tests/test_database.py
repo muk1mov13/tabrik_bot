@@ -242,3 +242,13 @@ async def test_digest_settings_and_due(db):
     await db.set_digest_enabled(5, G, False)
     assert not await db.get_digest_enabled(5, G)
     assert await db.get_digest_enabled(99, G)  # bog'lanmagan — standart yoqilgan
+
+
+async def test_peek_invite_does_not_consume(db):
+    d = date(2026, 11, 16)
+    token = await db.create_invite(G, created_by=1, today=d)
+    assert await db.peek_invite(token, d) == G
+    assert await db.peek_invite(token, d) == G
+    await db.use_invite(token, 5, d)
+    assert await db.peek_invite(token, d) is None
+    assert await db.peek_invite("yo'q", d) is None

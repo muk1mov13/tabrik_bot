@@ -49,6 +49,8 @@ MONTH_NAMES = _month_names()
 EDIT_PATTERN = re.compile(r"^(?P<id>\d+)\s+(?P<rest>.+)$")
 # /start payloadi: "g_<guruh ID>" (guruhdagi "➕ Qo'shish" tugmasidan)
 GROUP_PAYLOAD_PATTERN = re.compile(r"^g_(?P<id>-?\d+)$")
+# Boshqaruvchi taklifi: "m_<token>" (Database.create_invite)
+INVITE_PAYLOAD_PATTERN = re.compile(r"^m_(?P<token>[A-Za-z0-9_-]{8,40})$")
 
 
 class ParseError(ValueError):
@@ -140,6 +142,12 @@ def parse_edit(text: str, today: date) -> tuple[int, ParsedBirthday]:
     if not match:
         raise ParseError("Format noto'g'ri.")
     return int(match["id"]), parse_birthday(match["rest"], today)
+
+
+def parse_invite_payload(payload: str) -> Optional[str]:
+    """/start dagi 'm_<token>' dan taklif tokeni, noto'g'ri bo'lsa None."""
+    match = INVITE_PAYLOAD_PATTERN.match(payload.strip())
+    return match["token"] if match else None
 
 
 def parse_group_payload(payload: str) -> Optional[int]:

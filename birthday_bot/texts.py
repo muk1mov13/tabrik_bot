@@ -156,6 +156,27 @@ def manager_added_text(name: str, user_id: int) -> str:
     )
 
 
+INVITE_INVALID_TEXT = (
+    "⛔ Bu taklif havolasi eskirgan yoki allaqachon ishlatilgan. "
+    "Boshqaruvchidan yangi havola so'rang."
+)
+
+
+def invite_text(url: str) -> str:
+    return (
+        "🔗 Shu havolani yordamchingizga yuboring — u bosgach guruhning tug'ilgan "
+        f"kunlarini boshqaradi:\n\n<code>{escape(url)}</code>\n\n"
+        "Havola bir martalik, 7 kun amal qiladi va faqat guruh a'zosida ishlaydi."
+    )
+
+
+def invite_used_text(name: str, user_id: int, group_title: str) -> str:
+    return (
+        f"✅ {mention(name, user_id)} taklifingiz bilan «{escape(group_title)}» "
+        "guruhining boshqaruvchisi bo'ldi."
+    )
+
+
 def manager_removed_text(name: str, user_id: int) -> str:
     return f"✅ {mention(name, user_id)} endi boshqaruvchi emas."
 

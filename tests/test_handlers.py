@@ -47,6 +47,7 @@ from birthday_bot.config import Config
 from birthday_bot.handlers import build_router
 from birthday_bot.keyboards import (
     Cancel,
+    CreateInvite,
     ListTool,
     Menu,
     RecordAction,
@@ -793,3 +794,38 @@ async def test_link_existing_record_to_telegram_user(send, db):
     texts = await send(None, users_shared=free, chat_type="private")
     assert any('tg://user?id=77' in t for t in texts)
     assert (await db.get_birthday(G, a)).user_id == 77
+
+
+async def _invite_link(send, from_id=ADMIN) -> str:
+    await send.click(Menu(action="managers", group_id=G).pack(), from_id=from_id)
+    (reply,) = await send.click(buttons(send.session.last_markup())["🔗 Taklif havolasi"], from_id=from_id)
+    assert "https://t.me/MyBot?start=m_" in reply
+    return reply.split("start=")[1].split("<")[0]
+
+
+async def test_manager_invite_link(send, db):
+    await db.upsert_group(G, "Oila")
+    await db.add_manager(G, MEMBER)  # boshqaruvchi ham havola yarata oladi
+    payload = await _invite_link(send, from_id=MEMBER)
+
+    # Guruhdan tashqaridagi odam — rad, havola ishlatilmaydi
+    (reply,) = await send(f"/start {payload}", from_id=OUTSIDER, chat_type="private")
+    assert "a'zosi emassiz" in reply
+
+    texts = await send(f"/start {payload}", from_id=77, chat_type="private")
+    assert await db.is_manager(G, 77)
+    assert any("Nima qilamiz?" in t for t in texts)
+    notice = [r for r in send.session.requests if isinstance(r, SendMessage) and r.chat_id == MEMBER]
+    assert notice and "boshqaruvchi" in notice[0].text
+
+    # Bir martalik
+    (reply,) = await send(f"/start {payload}", from_id=78, chat_type="private")
+    assert "eskirgan" in reply
+    assert not await db.is_manager(G, 78)
+
+
+async def test_member_cannot_create_invite(send, db):
+    await db.upsert_group(G, "Oila")
+    assert await send.click(CreateInvite(group_id=G).pack(), from_id=MEMBER) == []
+    (reply,) = await send("/start m_notarealtoken1", from_id=MEMBER, chat_type="private")
+    assert "eskirgan" in reply
