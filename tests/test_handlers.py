@@ -12,9 +12,11 @@ from zoneinfo import ZoneInfo
 import pytest
 from aiogram import Bot, Dispatcher
 from aiogram.client.session.base import BaseSession
+from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.methods import (
     AnswerCallbackQuery,
     EditMessageText,
+    GetChat,
     GetChatMember,
     GetMe,
     SendMessage,
@@ -23,8 +25,12 @@ from aiogram.methods import (
 from aiogram.types import (
     CallbackQuery,
     Chat,
+    ChatFullInfo,
+    ChatMemberLeft,
     ChatMemberMember,
     ChatMemberOwner,
+    ChatMemberUpdated,
+    InlineKeyboardMarkup,
     Message,
     Sticker,
     Update,
@@ -33,8 +39,9 @@ from aiogram.types import (
 
 from birthday_bot.config import Config
 from birthday_bot.handlers import build_router
+from birthday_bot.models import Group
 
-G = -100123
+G, G2 = -100123, -100456
 ADMIN, MEMBER = 1, 2
 _ids = count(1)
 
@@ -55,6 +62,11 @@ class MockSession(BaseSession):
             if method.user_id == ADMIN:
                 return ChatMemberOwner(user=user, is_anonymous=False)
             return ChatMemberMember(user=user)
+        if isinstance(method, GetChat):
+            return ChatFullInfo(
+                id=method.chat_id, type="supergroup", title="Oila",
+                accent_color_id=0, max_reaction_count=0,
+            )
         if isinstance(method, (SendMessage, EditMessageText)):
             return Message(
                 message_id=next(_ids),
@@ -73,6 +85,16 @@ class MockSession(BaseSession):
     def sent_texts(self) -> list[str]:
         return [r.text for r in self.requests if isinstance(r, (SendMessage, EditMessageText))]
 
+    def last_markup(self) -> Optional[InlineKeyboardMarkup]:
+        for r in reversed(self.requests):
+            if isinstance(r, (SendMessage, EditMessageText)):
+                return r.reply_markup
+        return None
+
+    def last_alert(self) -> Optional[AnswerCallbackQuery]:
+        alerts = [r for r in self.requests if isinstance(r, AnswerCallbackQuery)]
+        return alerts[-1] if alerts else None
+
 
 # Routerlar modul darajasida — Dispatcher bir marta yaratiladi
 dispatcher = Dispatcher()
@@ -88,17 +110,64 @@ def message(
     from_id: int = ADMIN,
     reply_to: Optional[Message] = None,
     from_name: str = "User",
+    chat_type: str = "supergroup",
     **kw,
 ) -> Message:
+    chat_id = from_id if chat_type == "private" else G
     return Message(
         message_id=next(_ids),
         date=datetime.now(),
-        chat=Chat(id=G, type="supergroup"),
+        chat=Chat(id=chat_id, type=chat_type),
         from_user=user(from_id, from_name),
         text=text,
         reply_to_message=reply_to,
         **kw,
     )
+
+
+def callback_update(data: str, from_id: int = ADMIN) -> Update:
+    """Shaxsiy chatdagi menyu xabarida tugma bosilishi."""
+    return Update(
+        update_id=next(_ids),
+        callback_query=CallbackQuery(
+            id=str(next(_ids)),
+            from_user=user(from_id),
+            chat_instance="ci",
+            message=message("menyu", from_id=from_id, chat_type="private"),
+            data=data,
+        ),
+    )
+
+
+def membership_update(old: str, new: str) -> Update:
+    """Botning guruhdagi holati o'zgarishi ("left" yoki "member")."""
+    bot_user = User(id=42, is_bot=True, first_name="Bot")
+
+    def member(status: str):
+        return ChatMemberLeft(user=bot_user) if status == "left" else ChatMemberMember(user=bot_user)
+
+    return Update(
+        update_id=next(_ids),
+        my_chat_member=ChatMemberUpdated(
+            chat=Chat(id=G, type="supergroup", title="Oila"),
+            from_user=user(ADMIN),
+            date=datetime.now(),
+            old_chat_member=member(old),
+            new_chat_member=member(new),
+        ),
+    )
+
+
+def buttons(markup: Optional[InlineKeyboardMarkup]) -> dict[str, str]:
+    """Tugma matni → callback_data (yoki URL)."""
+    if markup is None:
+        return {}
+    return {b.text: b.callback_data or b.url for row in markup.inline_keyboard for b in row}
+
+
+async def admin_in_group(db):
+    await db.upsert_group(G, "Oila")
+    await db.link_admin(ADMIN, G)
 
 
 @pytest.fixture
@@ -117,6 +186,8 @@ async def send(db, config):
     bot = Bot("42:TEST", session=session)
     dispatcher["db"] = db
     dispatcher["config"] = config
+    # Savol-javob holati testlar orasida o'tib ketmasligi uchun
+    dispatcher.fsm.storage = MemoryStorage()
 
     async def _send(text=None, update: Optional[Update] = None, **kw) -> list[str]:
         session.requests.clear()
@@ -124,7 +195,11 @@ async def send(db, config):
         await dispatcher.feed_update(bot, update)
         return session.sent_texts()
 
+    async def _click(data: str, from_id: int = ADMIN) -> list[str]:
+        return await _send(update=callback_update(data, from_id))
+
     _send.session = session
+    _send.click = _click
     return _send
 
 
