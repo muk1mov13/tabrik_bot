@@ -57,6 +57,16 @@ MIGRATIONS = [
         PRIMARY KEY (user_id, group_id)
     );
     """,
+    # 3 — bog'lanish endi har qanday rol uchun; qo'shgan/tayinlangan boshqaruvchilar
+    """
+    ALTER TABLE group_admins RENAME TO group_links;
+    CREATE TABLE group_managers (
+        group_id INTEGER NOT NULL,
+        user_id INTEGER NOT NULL,
+        added_by INTEGER,
+        PRIMARY KEY (group_id, user_id)
+    );
+    """,
 ]
 
 SETTING_FIELDS = {"notify_time", "remind_days", "upcoming_days", "sticker_file_id"}
@@ -172,6 +182,14 @@ class Database:
         )
         return _to_birthday(row) if row else None
 
+    async def get_birthday_by_user(self, group_id: int, user_id: int) -> Optional[Birthday]:
+        """Telegram foydalanuvchisiga bog'langan yozuv (a'zo o'z yozuvini boshqaradi)."""
+        row = await self._fetchone(
+            "SELECT * FROM birthdays WHERE group_id = ? AND user_id = ? ORDER BY id LIMIT 1",
+            (group_id, user_id),
+        )
+        return _to_birthday(row) if row else None
+
     async def update_birthday(
         self,
         group_id: int,
@@ -226,6 +244,11 @@ class Database:
         found = [b for b in await self.list_birthdays(group_id) if needle in b.name.casefold()]
         return found[:limit]
 
+    async def find_same_name(self, group_id: int, name: str) -> list[Birthday]:
+        """Ismi aynan shunday yozuvlar (bo'shliq va katta-kichik harf hisobga olinmaydi)."""
+        key = " ".join(name.split()).casefold()
+        return [b for b in await self.list_birthdays(group_id) if b.name.casefold() == key]
+
     async def get_upcoming(self, group_id: int, today: date, days_ahead: int) -> list[Upcoming]:
         """Kelasi N kun ichidagi tug'ilgan kunlar, eng yaqini birinchi."""
         result = []
@@ -251,7 +274,11 @@ class Database:
                 "UPDATE OR IGNORE groups SET group_id = ? WHERE group_id = ?", (new_id, old_id)
             )
             await self._execute(
-                "UPDATE OR IGNORE group_admins SET group_id = ? WHERE group_id = ?",
+                "UPDATE OR IGNORE group_links SET group_id = ? WHERE group_id = ?",
+                (new_id, old_id),
+            )
+            await self._execute(
+                "UPDATE OR IGNORE group_managers SET group_id = ? WHERE group_id = ?",
                 (new_id, old_id),
             )
 
@@ -388,22 +415,28 @@ class Database:
         row = await self._fetchone("SELECT * FROM groups WHERE group_id = ?", (group_id,))
         return _to_group(row) if row else None
 
-    async def link_admin(self, user_id: int, group_id: int):
+    async def link_user(self, user_id: int, group_id: int):
         await self._execute(
-            "INSERT OR IGNORE INTO group_admins (user_id, group_id) VALUES (?, ?)",
+            "INSERT OR IGNORE INTO group_links (user_id, group_id) VALUES (?, ?)",
             (user_id, group_id),
         )
 
-    async def unlink_admin(self, user_id: int, group_id: int):
+    async def unlink_user(self, user_id: int, group_id: int):
         await self._execute(
-            "DELETE FROM group_admins WHERE user_id = ? AND group_id = ?", (user_id, group_id)
+            "DELETE FROM group_links WHERE user_id = ? AND group_id = ?", (user_id, group_id)
         )
 
-    async def admin_groups(self, user_id: int) -> list[Group]:
-        """Foydalanuvchi bog'langan faol guruhlar (adminlik bu yerda tekshirilmaydi)."""
+    async def linked_users(self, group_id: int) -> list[int]:
+        rows = await self._fetchall(
+            "SELECT user_id FROM group_links WHERE group_id = ? ORDER BY user_id", (group_id,)
+        )
+        return [row[0] for row in rows]
+
+    async def linked_groups(self, user_id: int) -> list[Group]:
+        """Foydalanuvchi bog'langan faol guruhlar (rol bu yerda tekshirilmaydi)."""
         rows = await self._fetchall(
             """
-            SELECT g.* FROM group_admins a
+            SELECT g.* FROM group_links a
             JOIN groups g ON g.group_id = a.group_id
             WHERE a.user_id = ? AND g.active = 1
             ORDER BY g.title COLLATE NOCASE, g.group_id
@@ -411,3 +444,27 @@ class Database:
             (user_id,),
         )
         return [_to_group(row) for row in rows]
+
+    async def add_manager(self, group_id: int, user_id: int, added_by: Optional[int] = None):
+        await self._execute(
+            "INSERT OR IGNORE INTO group_managers (group_id, user_id, added_by) VALUES (?, ?, ?)",
+            (group_id, user_id, added_by),
+        )
+
+    async def remove_manager(self, group_id: int, user_id: int) -> bool:
+        cursor = await self._execute(
+            "DELETE FROM group_managers WHERE group_id = ? AND user_id = ?", (group_id, user_id)
+        )
+        return cursor.rowcount == 1
+
+    async def is_manager(self, group_id: int, user_id: int) -> bool:
+        row = await self._fetchone(
+            "SELECT 1 FROM group_managers WHERE group_id = ? AND user_id = ?", (group_id, user_id)
+        )
+        return row is not None
+
+    async def list_managers(self, group_id: int) -> list[int]:
+        rows = await self._fetchall(
+            "SELECT user_id FROM group_managers WHERE group_id = ? ORDER BY user_id", (group_id,)
+        )
+        return [row[0] for row in rows]

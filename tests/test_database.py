@@ -115,13 +115,15 @@ async def test_migrate_group(db):
     await db.add_birthday(G, "Ali", 1, 1)
     await db.set_setting(G, "remind_days", 5)
     await db.upsert_group(G, "Oila")
-    await db.link_admin(1, G)
+    await db.link_user(1, G)
+    await db.add_manager(G, 5)
     await db.migrate_group(G, -1009)
     assert await db.count_birthdays(G) == 0
     assert await db.count_birthdays(-1009) == 1
     assert (await db.get_settings(-1009)).remind_days == 5
     assert (await db.get_group(-1009)).title == "Oila"
-    assert [g.group_id for g in await db.admin_groups(1)] == [-1009]
+    assert [g.group_id for g in await db.linked_groups(1)] == [-1009]
+    assert await db.list_managers(-1009) == [5]
 
 
 async def test_groups_and_admins(db):
@@ -131,17 +133,17 @@ async def test_groups_and_admins(db):
     await db.upsert_group(G, "Oila 2")
     assert await db.get_group(G) == Group(group_id=G, title="Oila 2", active=True)
 
-    await db.link_admin(1, G)
-    await db.link_admin(1, G)  # takror — xato bermaydi
-    await db.link_admin(1, -200)
-    await db.link_admin(2, G)
-    assert [g.title for g in await db.admin_groups(1)] == ["Boshqa", "Oila 2"]
+    await db.link_user(1, G)
+    await db.link_user(1, G)  # takror — xato bermaydi
+    await db.link_user(1, -200)
+    await db.link_user(2, G)
+    assert [g.title for g in await db.linked_groups(1)] == ["Boshqa", "Oila 2"]
 
     await db.set_group_active(-200, False)
-    assert [g.group_id for g in await db.admin_groups(1)] == [G]
-    await db.unlink_admin(1, G)
-    assert await db.admin_groups(1) == []
-    assert [g.group_id for g in await db.admin_groups(2)] == [G]
+    assert [g.group_id for g in await db.linked_groups(1)] == [G]
+    await db.unlink_user(1, G)
+    assert await db.linked_groups(1) == []
+    assert [g.group_id for g in await db.linked_groups(2)] == [G]
 
 
 async def test_set_group_active_for_unknown_group(db):
@@ -161,3 +163,33 @@ async def test_inactive_groups_are_skipped(db):
     await db.upsert_group(G, "Oila")
     assert len(await db.get_pending_greetings(d, time(8, 0))) == 1
     assert len(await db.get_pending_reminders(d, time(8, 0))) == 1
+
+
+async def test_managers(db):
+    assert not await db.is_manager(G, 5)
+    await db.add_manager(G, 5, added_by=1)
+    await db.add_manager(G, 5, added_by=1)  # takror — xato bermaydi
+    await db.add_manager(G, 6)
+    await db.add_manager(-200, 7)
+    assert await db.is_manager(G, 5)
+    assert await db.list_managers(G) == [5, 6]
+    assert await db.remove_manager(G, 5)
+    assert not await db.remove_manager(G, 5)
+    assert await db.list_managers(G) == [6]
+
+
+async def test_linked_users(db):
+    await db.link_user(5, G)
+    await db.link_user(3, G)
+    await db.link_user(5, -200)
+    assert await db.linked_users(G) == [3, 5]
+
+
+async def test_birthday_by_user_and_same_name(db):
+    await db.add_birthday(G, "Karim Aka", 1, 1)
+    b = await db.add_birthday(G, "Sardor", 2, 2, user_id=77)
+    await db.add_birthday(-200, "Sardor", 2, 2, user_id=77)
+    assert (await db.get_birthday_by_user(G, 77)).id == b
+    assert await db.get_birthday_by_user(G, 78) is None
+    assert [x.name for x in await db.find_same_name(G, "  karim   aka ")] == ["Karim Aka"]
+    assert await db.find_same_name(G, "Karim") == []

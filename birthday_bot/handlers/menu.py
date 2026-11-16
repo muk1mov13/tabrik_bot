@@ -26,17 +26,17 @@ router.message.filter(F.chat.type == ChatType.PRIVATE)
 async def available_groups(bot: Bot, db: Database, user_id: int) -> list[Group]:
     """Foydalanuvchi hozir ham admini bo'lgan bog'langan guruhlar."""
     groups = []
-    for group in await db.admin_groups(user_id):
+    for group in await db.linked_groups(user_id):
         if await is_admin(bot, group.group_id, user_id):
             groups.append(group)
         else:
-            await db.unlink_admin(user_id, group.group_id)
+            await db.unlink_user(user_id, group.group_id)
     return groups
 
 
 async def main_menu_view(db: Database, user_id: int, group_id: int) -> tuple[str, InlineKeyboardMarkup]:
     group = await db.get_group(group_id)
-    many_groups = len(await db.admin_groups(user_id)) > 1
+    many_groups = len(await db.linked_groups(user_id)) > 1
     return menu_text(group.title if group else ""), main_menu_keyboard(group_id, many_groups)
 
 
@@ -62,7 +62,7 @@ async def cmd_start_link(message: Message, command: CommandObject, bot: Bot, db:
         return
 
     if not await is_admin(bot, group_id, user_id):
-        await db.unlink_admin(user_id, group_id)
+        await db.unlink_user(user_id, group_id)
         await message.answer(NOT_ADMIN_TEXT)
         return
 
@@ -70,7 +70,7 @@ async def cmd_start_link(message: Message, command: CommandObject, bot: Bot, db:
         # Bot guruhga bu yangilanishdan oldin qo'shilgan — nomini so'raymiz
         chat = await bot.get_chat(group_id)
         await db.upsert_group(group_id, chat.title or "")
-    await db.link_admin(user_id, group_id)
+    await db.link_user(user_id, group_id)
     text, keyboard = await main_menu_view(db, user_id, group_id)
     await message.answer(text, reply_markup=keyboard)
 

@@ -27,7 +27,7 @@ async def ensure_admin(
     user_id = event.from_user.id
     if await is_admin(bot, group_id, user_id):
         return True
-    await db.unlink_admin(user_id, group_id)
+    await db.unlink_user(user_id, group_id)
     if isinstance(event, CallbackQuery):
         await event.answer(NOT_ADMIN_ALERT, show_alert=True)
     else:

@@ -174,7 +174,7 @@ def buttons(markup: Optional[InlineKeyboardMarkup]) -> dict[str, str]:
 
 async def admin_in_group(db):
     await db.upsert_group(G, "Oila")
-    await db.link_admin(ADMIN, G)
+    await db.link_user(ADMIN, G)
 
 
 @pytest.fixture
@@ -344,7 +344,7 @@ async def test_deep_link_admin_gets_menu(send, db):
     (reply,) = await send(f"/start g_{G}", chat_type="private")
     assert "Oila" in reply
     assert list(buttons(send.session.last_markup())) == ["➕ Qo'shish", "📋 Ro'yxat", "⚙️ Sozlamalar"]
-    assert [g.group_id for g in await db.admin_groups(ADMIN)] == [G]
+    assert [g.group_id for g in await db.linked_groups(ADMIN)] == [G]
     # Keyingi safar havolasiz ham menyu ochiladi
     (reply,) = await send("/start", chat_type="private")
     assert "Oila" in reply
@@ -360,7 +360,7 @@ async def test_deep_link_non_admin_rejected(send, db):
     await db.upsert_group(G, "Oila")
     (reply,) = await send(f"/start g_{G}", from_id=MEMBER, chat_type="private")
     assert "admindan so'rang" in reply
-    assert await db.admin_groups(MEMBER) == []
+    assert await db.linked_groups(MEMBER) == []
 
 
 async def test_start_without_groups_explains(send):
@@ -373,8 +373,8 @@ async def test_start_without_groups_explains(send):
 async def test_many_groups_choose_and_switch(send, db):
     await db.upsert_group(G, "Oila")
     await db.upsert_group(G2, "Ish")
-    await db.link_admin(ADMIN, G)
-    await db.link_admin(ADMIN, G2)
+    await db.link_user(ADMIN, G)
+    await db.link_user(ADMIN, G2)
     (reply,) = await send("/menu", chat_type="private")
     assert "Qaysi guruh" in reply
     kb = buttons(send.session.last_markup())
@@ -389,10 +389,10 @@ async def test_many_groups_choose_and_switch(send, db):
 
 async def test_lost_admin_rights_unlinks(send, db):
     await db.upsert_group(G, "Oila")
-    await db.link_admin(MEMBER, G)
+    await db.link_user(MEMBER, G)
     (reply,) = await send("/start", from_id=MEMBER, chat_type="private")
     assert "guruhingizga qo'shing" in reply
-    assert await db.admin_groups(MEMBER) == []
+    assert await db.linked_groups(MEMBER) == []
 
 
 async def test_forged_callback_rejected(send, db):
