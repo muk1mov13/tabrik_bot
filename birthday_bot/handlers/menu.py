@@ -31,10 +31,11 @@ from birthday_bot.keyboards import (
 )
 from birthday_bot.models import Group
 from birthday_bot.parsing import parse_group_payload
-from birthday_bot.permissions import Role, get_role
+from birthday_bot.permissions import Role, get_role, resolve_group
 from birthday_bot.texts import (
     CANCELLED_TEXT,
     CHOOSE_GROUP_TEXT,
+    GROUP_UNAVAILABLE_TEXT,
     NO_GROUPS_TEXT,
     NOT_IN_GROUP_TEXT,
     managers_text,
@@ -96,6 +97,14 @@ async def cmd_start_link(
         text, keyboard = await start_view(bot, db, config, user_id)
         await message.answer(text, reply_markup=keyboard)
         return
+
+    # Eski tugma: guruh supergroupga aylangan bo'lsa yangi ID ga o'tamiz
+    resolved = await resolve_group(bot, db, group_id)
+    if resolved is None:
+        await db.unlink_user(user_id, group_id)
+        await message.answer(GROUP_UNAVAILABLE_TEXT)
+        return
+    group_id = resolved
 
     role = await get_role(bot, db, group_id, user_id)
     if role == Role.NONE:

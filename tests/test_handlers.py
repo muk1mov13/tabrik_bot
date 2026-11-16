@@ -12,6 +12,7 @@ from zoneinfo import ZoneInfo
 import pytest
 from aiogram import Bot, Dispatcher
 from aiogram.client.session.base import BaseSession
+from aiogram.exceptions import TelegramBadRequest, TelegramMigrateToChat
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.methods import (
     AnswerCallbackQuery,
@@ -55,6 +56,8 @@ from birthday_bot.keyboards import (
 from birthday_bot.models import Group
 
 G, G2 = -100123, -100456
+OLD_G = -555  # supergroupga aylangan eski guruh ID'si (yangisi — G)
+GONE_G = -404  # bot chiqarilgan yoki o'chirilgan guruh
 ADMIN, MEMBER, OUTSIDER = 1, 2, 3
 _ids = count(1)
 
@@ -78,6 +81,12 @@ class MockSession(BaseSession):
                 return ChatMemberLeft(user=user)
             return ChatMemberMember(user=user)
         if isinstance(method, GetChat):
+            if method.chat_id == OLD_G:
+                raise TelegramMigrateToChat(
+                    method=method, message="group upgraded", migrate_to_chat_id=G
+                )
+            if method.chat_id == GONE_G:
+                raise TelegramBadRequest(method=method, message="chat not found")
             return ChatFullInfo(
                 id=method.chat_id, type="supergroup", title="Oila",
                 accent_color_id=0, max_reaction_count=0,
@@ -668,3 +677,18 @@ async def test_member_warned_about_unlinked_record_with_same_name(send, db):
     await send.click(SelfAction(action="add", group_id=G).pack(), from_id=MEMBER)
     (reply,) = await send("15.03", from_id=MEMBER, chat_type="private")
     assert "allaqachon bor" in reply
+
+
+async def test_deep_link_old_group_id_follows_migration(send, db):
+    await db.upsert_group(OLD_G, "Oila")
+    await db.add_birthday(OLD_G, "Ali", 1, 1)
+    (reply,) = await send(f"/start g_{OLD_G}", chat_type="private")
+    assert "Nima qilamiz?" in reply
+    assert await db.count_birthdays(G) == 1
+    assert [g.group_id for g in await db.linked_groups(ADMIN)] == [G]
+
+
+async def test_deep_link_unknown_group(send, db):
+    (reply,) = await send(f"/start g_{GONE_G}", chat_type="private")
+    assert "topilmadi" in reply
+    assert await db.linked_groups(ADMIN) == []

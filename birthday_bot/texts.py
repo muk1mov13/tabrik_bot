@@ -64,6 +64,10 @@ MANAGER_USAGE = (
     "Olib tashlash: reply qilib <code>/manager off</code>."
 )
 MANAGER_ADMIN_ONLY_TEXT = "⛔ Boshqaruvchilarni faqat guruh adminlari tayinlaydi."
+GROUP_UNAVAILABLE_TEXT = (
+    "Bot bu guruhda topilmadi yoki guruh o'zgargan. "
+    "Guruhda /menu yozing va yangi tugmani bosing."
+)
 NOT_IN_GROUP_TEXT = (
     "⛔ Siz bu guruh a'zosi emassiz. Guruhga qo'shilgach, tugmani qayta bosing."
 )
