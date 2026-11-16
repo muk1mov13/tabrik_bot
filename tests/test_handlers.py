@@ -589,3 +589,37 @@ async def test_manager_sees_list_but_cannot_remove(send, db):
     assert not any(t.startswith("🗑") for t in buttons(send.session.last_markup()))
     assert await send.click(RemoveManager(group_id=G, user_id=77).pack(), from_id=MEMBER) == []
     assert await db.is_manager(G, 77)
+
+
+async def test_member_adds_and_manages_own_birthday(send, db):
+    await db.upsert_group(G, "Oila")
+    (reply,) = await send.click(SelfAction(action="add", group_id=G).pack(), from_id=MEMBER)
+    assert "Tug'ilgan kuningiz qachon?" in reply
+    (reply,) = await send("15.03.1990", from_id=MEMBER, chat_type="private")
+    assert "15 Mart 1990" in reply
+    (reply,) = await send.click(buttons(send.session.last_markup())["✅ Saqlash"], from_id=MEMBER)
+    assert "Saqlandi" in reply
+    assert "📅 Sanani o'zgartirish" in buttons(send.session.last_markup())
+    b = await db.get_birthday_by_user(G, MEMBER)
+    assert (b.name, b.day, b.month, b.year) == ("User", 15, 3, 1990)
+
+    # Sanani o'zgartirish yangi yozuv qo'shmaydi
+    await send.click(SelfAction(action="date", group_id=G).pack(), from_id=MEMBER)
+    await send("16.03", from_id=MEMBER, chat_type="private")
+    await send.click(SelfAction(action="save", group_id=G).pack(), from_id=MEMBER)
+    assert await db.count_birthdays(G) == 1
+    assert (await db.get_birthday_by_user(G, MEMBER)).day == 16
+
+    (reply,) = await send.click(SelfAction(action="del", group_id=G).pack(), from_id=MEMBER)
+    assert "o'chirilsinmi" in reply
+    (reply,) = await send.click(SelfAction(action="delyes", group_id=G).pack(), from_id=MEMBER)
+    assert "o'chirildi" in reply
+    assert await db.count_birthdays(G) == 0
+
+
+async def test_member_cannot_touch_others(send, db):
+    await db.upsert_group(G, "Oila")
+    other = await db.add_birthday(G, "Boshqa", 1, 1, user_id=77)
+    await send.click(SelfAction(action="delyes", group_id=G).pack(), from_id=MEMBER)
+    assert await db.get_birthday(G, other) is not None
+    assert await send.click(SelfAction(action="add", group_id=G).pack(), from_id=OUTSIDER) == []

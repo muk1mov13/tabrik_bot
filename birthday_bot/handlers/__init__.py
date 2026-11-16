@@ -13,6 +13,7 @@ from birthday_bot.handlers import (
     group_events,
     manage,
     menu,
+    self_flow,
     settings,
     settings_menu,
 )
@@ -32,5 +33,6 @@ def build_router() -> Router:
         add_flow.router,
         manage.router,
         settings_menu.router,
+        self_flow.router,
     )
     return root
