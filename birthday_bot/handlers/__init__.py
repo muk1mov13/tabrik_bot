@@ -6,7 +6,7 @@ qarang).
 
 from aiogram import Router
 
-from birthday_bot.handlers import birthdays, common, group_events, settings
+from birthday_bot.handlers import birthdays, common, group_events, menu, settings
 from birthday_bot.handlers.ui import ClearStateOnCommand
 
 
@@ -15,6 +15,7 @@ def build_router() -> Router:
     root.message.outer_middleware(ClearStateOnCommand())
     root.include_routers(
         group_events.router,
+        menu.router,
         common.router,
         birthdays.router,
         settings.router,

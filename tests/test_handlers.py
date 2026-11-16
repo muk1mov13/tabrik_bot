@@ -39,6 +39,13 @@ from aiogram.types import (
 
 from birthday_bot.config import Config
 from birthday_bot.handlers import build_router
+from birthday_bot.keyboards import (
+    Cancel,
+    Menu,
+    RecordAction,
+    SaveNew,
+    SetRemind,
+)
 from birthday_bot.models import Group
 
 G, G2 = -100123, -100456
@@ -330,3 +337,66 @@ async def test_group_menu_command(send, db):
     assert await db.get_group(G) is not None
     (reply,) = await send("/start")
     assert "Salom" in reply
+
+
+async def test_deep_link_admin_gets_menu(send, db):
+    await db.upsert_group(G, "Oila")
+    (reply,) = await send(f"/start g_{G}", chat_type="private")
+    assert "Oila" in reply
+    assert list(buttons(send.session.last_markup())) == ["➕ Qo'shish", "📋 Ro'yxat", "⚙️ Sozlamalar"]
+    assert [g.group_id for g in await db.admin_groups(ADMIN)] == [G]
+    # Keyingi safar havolasiz ham menyu ochiladi
+    (reply,) = await send("/start", chat_type="private")
+    assert "Oila" in reply
+
+
+async def test_deep_link_unknown_group_fetches_title(send, db):
+    (reply,) = await send(f"/start g_{G}", chat_type="private")
+    assert "Oila" in reply
+    assert (await db.get_group(G)).title == "Oila"
+
+
+async def test_deep_link_non_admin_rejected(send, db):
+    await db.upsert_group(G, "Oila")
+    (reply,) = await send(f"/start g_{G}", from_id=MEMBER, chat_type="private")
+    assert "admindan so'rang" in reply
+    assert await db.admin_groups(MEMBER) == []
+
+
+async def test_start_without_groups_explains(send):
+    (reply,) = await send("/start", chat_type="private")
+    assert "guruhingizga qo'shing" in reply
+    (reply,) = await send("/start g_xyz", chat_type="private")
+    assert "guruhingizga qo'shing" in reply
+
+
+async def test_many_groups_choose_and_switch(send, db):
+    await db.upsert_group(G, "Oila")
+    await db.upsert_group(G2, "Ish")
+    await db.link_admin(ADMIN, G)
+    await db.link_admin(ADMIN, G2)
+    (reply,) = await send("/menu", chat_type="private")
+    assert "Qaysi guruh" in reply
+    kb = buttons(send.session.last_markup())
+    assert list(kb) == ["Ish", "Oila"]
+    (reply,) = await send.click(kb["Oila"])
+    assert "Oila" in reply
+    menu = buttons(send.session.last_markup())
+    assert "🔄 Guruhni almashtirish" in menu
+    (reply,) = await send.click(menu["🔄 Guruhni almashtirish"])
+    assert "Qaysi guruh" in reply
+
+
+async def test_lost_admin_rights_unlinks(send, db):
+    await db.upsert_group(G, "Oila")
+    await db.link_admin(MEMBER, G)
+    (reply,) = await send("/start", from_id=MEMBER, chat_type="private")
+    assert "guruhingizga qo'shing" in reply
+    assert await db.admin_groups(MEMBER) == []
+
+
+async def test_forged_callback_rejected(send, db):
+    await db.upsert_group(G, "Oila")
+    assert await send.click(Menu(action="home", group_id=G).pack(), from_id=MEMBER) == []
+    alert = send.session.last_alert()
+    assert alert.show_alert and "⛔" in alert.text
