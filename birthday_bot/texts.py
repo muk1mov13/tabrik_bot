@@ -59,12 +59,11 @@ SETTINGS_USAGE = (
     "• stikerga reply qilib <code>/setsticker</code>"
 )
 
-WELCOME_TEXT = (
-    "👋 Salom! Men shu guruhdagilarning tug'ilgan kunini eslab, "
-    "o'z vaqtida tabriklayman 🎉\n\n"
-    "Guruh adminlari pastdagi tugma orqali tug'ilgan kunlarni qo'shadi.\n"
-    "Hamma uchun: /upcoming — yaqin tug'ilgan kunlar, /list — ro'yxat."
+MANAGER_USAGE = (
+    "Boshqaruvchi tayinlash: odamning xabariga reply qilib <code>/manager</code> yozing.\n"
+    "Olib tashlash: reply qilib <code>/manager off</code>."
 )
+MANAGER_ADMIN_ONLY_TEXT = "⛔ Boshqaruvchilarni faqat guruh adminlari tayinlaydi."
 NOT_ADMIN_TEXT = (
     "⛔ Qo'shish faqat guruh adminlariga ruxsat etilgan. "
     "Tug'ilgan kuningizni qo'shishni admindan so'rang 🙂"
@@ -75,9 +74,10 @@ STALE_TEXT = "Bu menyu eskirgan. /menu ni bosing."
 NO_GROUPS_TEXT = (
     "Hali birorta guruhingiz ulanmagan.\n\n"
     "1. Meni oila guruhingizga qo'shing.\n"
-    "2. Guruhda <b>➕ Tug'ilgan kun qo'shish</b> tugmasini bosing "
+    "2. Guruhda <b>🎂 Tug'ilgan kun qo'shish</b> tugmasini bosing "
     "(tugma ko'rinmasa, guruhda /menu yozing).\n\n"
-    "Buni faqat guruh admini qila oladi."
+    "Botni guruhga qo'shgan odam va guruh adminlari hamma tug'ilgan kunlarni "
+    "boshqaradi, qolganlar o'z tug'ilgan kunini qo'sha oladi."
 )
 CHOOSE_GROUP_TEXT = "Qaysi guruh bilan ishlaymiz?"
 ASK_NAME_TEXT = "Kimning tug'ilgan kuni? Ismini yozing.\nMasalan: <i>Karim aka</i>"
@@ -98,6 +98,30 @@ def mention(name: str, user_id: Optional[int] = None) -> str:
     if user_id:
         return f'<a href="tg://user?id={user_id}">{safe}</a>'
     return safe
+
+
+def welcome_text(adder_name: Optional[str] = None, adder_id: Optional[int] = None) -> str:
+    text = (
+        "👋 Salom! Men shu guruhdagilarning tug'ilgan kunini eslab, "
+        "o'z vaqtida tabriklayman 🎉\n\n"
+    )
+    if adder_name:
+        text += f"Meni {mention(adder_name, adder_id)} qo'shdi — u tug'ilgan kunlarni boshqaradi.\n"
+    return text + (
+        "Har kim o'z tug'ilgan kunini pastdagi tugma orqali qo'sha oladi.\n"
+        "Hamma uchun: /upcoming — yaqin tug'ilgan kunlar, /list — ro'yxat."
+    )
+
+
+def manager_added_text(name: str, user_id: int) -> str:
+    return (
+        f"✅ {mention(name, user_id)} endi tug'ilgan kunlarni boshqaradi. "
+        "Botga shaxsiy yozib /menu ni bosishi kifoya."
+    )
+
+
+def manager_removed_text(name: str, user_id: int) -> str:
+    return f"✅ {mention(name, user_id)} endi boshqaruvchi emas."
 
 
 def format_date(day: int, month: int, year: Optional[int] = None) -> str:

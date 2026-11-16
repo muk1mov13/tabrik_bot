@@ -77,7 +77,7 @@ def home_button(group_id: int) -> InlineKeyboardButton:
 
 def group_invite_keyboard(bot_username: str, group_id: int) -> InlineKeyboardMarkup:
     url = f"https://t.me/{bot_username}?start=g_{group_id}"
-    return _kb([InlineKeyboardButton(text="➕ Tug'ilgan kun qo'shish", url=url)])
+    return _kb([InlineKeyboardButton(text="🎂 Tug'ilgan kun qo'shish", url=url)])
 
 
 def main_menu_keyboard(group_id: int, many_groups: bool) -> InlineKeyboardMarkup:

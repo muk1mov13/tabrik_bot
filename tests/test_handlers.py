@@ -146,7 +146,7 @@ def callback_update(data: str, from_id: int = ADMIN) -> Update:
     )
 
 
-def membership_update(old: str, new: str) -> Update:
+def membership_update(old: str, new: str, by: int = ADMIN) -> Update:
     """Botning guruhdagi holati o'zgarishi ("left" yoki "member")."""
     bot_user = User(id=42, is_bot=True, first_name="Bot")
 
@@ -157,7 +157,7 @@ def membership_update(old: str, new: str) -> Update:
         update_id=next(_ids),
         my_chat_member=ChatMemberUpdated(
             chat=Chat(id=G, type="supergroup", title="Oila"),
-            from_user=user(ADMIN),
+            from_user=user(by),
             date=datetime.now(),
             old_chat_member=member(old),
             new_chat_member=member(new),
@@ -319,7 +319,7 @@ async def test_bot_added_to_group_greets_and_registers(send, db):
     (reply,) = await send(update=membership_update("left", "member"))
     assert "Salom" in reply
     assert buttons(send.session.last_markup()) == {
-        "➕ Tug'ilgan kun qo'shish": f"https://t.me/MyBot?start=g_{G}"
+        "🎂 Tug'ilgan kun qo'shish": f"https://t.me/MyBot?start=g_{G}"
     }
     assert await db.get_group(G) == Group(group_id=G, title="Oila", active=True)
 
@@ -333,7 +333,7 @@ async def test_bot_added_to_group_greets_and_registers(send, db):
 async def test_group_menu_command(send, db):
     (reply,) = await send("/menu")
     assert "Salom" in reply
-    assert "➕ Tug'ilgan kun qo'shish" in buttons(send.session.last_markup())
+    assert "🎂 Tug'ilgan kun qo'shish" in buttons(send.session.last_markup())
     assert await db.get_group(G) is not None
     (reply,) = await send("/start")
     assert "Salom" in reply
@@ -524,3 +524,31 @@ async def test_manager_can_use_commands(send, db):
     assert "Qo'shildi" in reply
     (reply,) = await send("/settings remind 3", from_id=MEMBER)
     assert "3 kun oldin" in reply
+
+
+async def test_member_who_adds_bot_becomes_manager(send, db):
+    (reply,) = await send(update=membership_update("left", "member", by=MEMBER))
+    assert 'tg://user?id=2' in reply and "boshqaradi" in reply
+    assert await db.is_manager(G, MEMBER)
+    assert await db.linked_users(G) == [MEMBER]
+    # Admin bo'lmasa ham menyu ochiladi
+    (reply,) = await send(f"/start g_{G}", from_id=MEMBER, chat_type="private")
+    assert "Nima qilamiz?" in reply
+
+
+async def test_admin_appoints_and_removes_manager(send, db):
+    target = message("salom", from_id=77, from_name="Sardor")
+    (reply,) = await send("/manager", reply_to=target)
+    assert "Sardor" in reply and "boshqaradi" in reply
+    assert await db.is_manager(G, 77)
+
+    (reply,) = await send("/manager off", reply_to=target)
+    assert "boshqaruvchi emas" in reply
+    assert not await db.is_manager(G, 77)
+
+    (reply,) = await send("/manager")
+    assert "reply" in reply
+
+    (reply,) = await send("/manager", from_id=MEMBER, reply_to=target)
+    assert "⛔" in reply
+    assert not await db.is_manager(G, 77)
