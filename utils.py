@@ -5,7 +5,8 @@ yoshni hisoblash.
 
 import os
 import re
-from datetime import date, datetime
+from datetime import date, datetime, time
+from html import escape
 from typing import Optional
 from zoneinfo import ZoneInfo
 
@@ -22,10 +23,32 @@ MONTH_NAMES = [
 
 MAX_NAME_LENGTH = 64
 
-# /add buyrug'ining argumentlari: "Ism Familiya 15.03" yoki "Ism 15.03.1998"
+# /add va /edit argumentlari: "Ism Familiya 15.03", "Ism 15.03.1998" yoki
+# faqat "15.03" (ism reply qilingan xabar egasidan yoki eski yozuvdan olinadi)
 ADD_ARGS_PATTERN = re.compile(
-    r"^(?P<name>.+?)\s+(?P<day>\d{1,2})\.(?P<month>\d{1,2})(?:\.(?P<year>\d{4}))?$"
+    r"^(?:(?P<name>.+?)\s+)?(?P<day>\d{1,2})\.(?P<month>\d{1,2})(?:\.(?P<year>\d{4}))?$"
 )
+
+TIME_PATTERN = re.compile(r"^(?P<hour>\d{1,2}):(?P<minute>\d{2})$")
+
+
+def parse_time(value: str) -> Optional[time]:
+    """'HH:MM' ni time ga aylantiradi, noto'g'ri bo'lsa None."""
+    match = TIME_PATTERN.match(value.strip())
+    if not match:
+        return None
+    hour, minute = int(match["hour"]), int(match["minute"])
+    if hour > 23 or minute > 59:
+        return None
+    return time(hour, minute)
+
+
+DEFAULT_NOTIFY_TIME = parse_time(os.getenv("NOTIFICATION_TIME", "08:00")) or time(8, 0)
+
+
+def escape_like(value: str) -> str:
+    """ILIKE qidiruvi uchun maxsus belgilarni (% _ \\) ekranlaydi."""
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
 def now() -> datetime:
@@ -66,6 +89,14 @@ def birthday_in_year(day: int, month: int, year: int) -> date:
     return date(year, month, day)
 
 
+def next_birthday(day: int, month: int, from_date: date) -> date:
+    """from_date dan boshlab (shu kun ham kiradi) eng yaqin tug'ilgan kun sanasi."""
+    bday = birthday_in_year(day, month, from_date.year)
+    if bday < from_date:
+        bday = birthday_in_year(day, month, from_date.year + 1)
+    return bday
+
+
 def birthday_keys_for(d: date) -> list[tuple[int, int]]:
     """Shu sanada nishonlanadigan (kun, oy) juftliklari."""
     keys = [(d.day, d.month)]
@@ -76,3 +107,11 @@ def birthday_keys_for(d: date) -> list[tuple[int, int]]:
 
 def calc_age(birth_year: int, on_date: date) -> int:
     return on_date.year - birth_year
+
+
+def mention(name: str, user_id: Optional[int] = None) -> str:
+    """HTML xabar uchun ism: Telegram user bog'langan bo'lsa — uni belgilaydigan havola."""
+    safe = escape(name)
+    if user_id:
+        return f'<a href="tg://user?id={user_id}">{safe}</a>'
+    return safe

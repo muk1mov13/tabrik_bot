@@ -16,8 +16,9 @@ from aiogram.enums import ParseMode
 from dotenv import load_dotenv
 
 import database as db
+from group_settings import router as settings_router
 from handlers import router
-from scheduler import notify_if_missed, setup_scheduler
+from scheduler import setup_scheduler
 
 load_dotenv()
 
@@ -41,12 +42,12 @@ async def main():
     bot = Bot(token=token, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     dp = Dispatcher()
     dp.include_router(router)
+    dp.include_router(settings_router)
 
     scheduler = setup_scheduler(bot)
 
     logger.info("Bot ishga tushdi. To'xtatish uchun Ctrl+C bosing.")
     try:
-        await notify_if_missed(bot)
         await dp.start_polling(bot)
     finally:
         scheduler.shutdown(wait=False)

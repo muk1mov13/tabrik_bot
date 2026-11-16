@@ -27,7 +27,7 @@ Serverga joylash: [deploy/DEPLOY.md](deploy/DEPLOY.md) (Ubuntu + systemd).
 | `BOT_TOKEN` | ha | [@BotFather](https://t.me/BotFather) tokeni |
 | `DATABASE_URL` | ha | `postgresql://user:parol@localhost:5432/db` |
 | `DEFAULT_GROUP_ID` | yo'q | Shaxsiy chatdan yozilgan buyruqlar shu guruhga tegishli bo'ladi |
-| `NOTIFICATION_TIME` | yo'q | Tabrik vaqti, `HH:MM` (default `08:00`) |
+| `NOTIFICATION_TIME` | yo'q | Default tabrik vaqti, `HH:MM` (default `08:00`); guruhda `/settings time` bilan o'zgartiriladi |
 | `TIMEZONE` | yo'q | Vaqt mintaqasi (default `Asia/Tashkent`) |
 
 ## Buyruqlar
@@ -35,16 +35,25 @@ Serverga joylash: [deploy/DEPLOY.md](deploy/DEPLOY.md) (Ubuntu + systemd).
 | Buyruq | Kim uchun | Tavsif |
 |---|---|---|
 | `/start`, `/help` | hamma | Yordam matni |
-| `/add Ism 15.03` | admin | Tug'ilgan kun qo'shish (kun.oy) |
-| `/add Ism 15.03.1998` | admin | Yil bilan qo'shish (yosh avtomatik hisoblanadi) |
-| `/list` | hamma | Guruhdagi barcha saqlangan tug'ilgan kunlar |
-| `/upcoming` | hamma | Kelasi 7 kun ichidagi tug'ilgan kunlar |
-| `/remove ID` | admin | Yozuvni o'chirish (`ID` ni `/list` dan oling) |
+| `/list` | hamma | Saqlangan tug'ilgan kunlar (20 tadan sahifalab, ◀️ ▶️ tugmalari) |
+| `/upcoming` | hamma | Yaqin kunlardagi tug'ilgan kunlar (default 7 kun) |
+| `/find Ism` | hamma | Ism bo'yicha qidirish |
+| `/settings` | hamma | Guruh sozlamalarini ko'rish |
+| `/add Ism 15.03[.1998]` | admin | Tug'ilgan kun qo'shish (yil bilan — yosh hisoblanadi) |
+| reply + `/add 15.03` | admin | Odam xabariga reply qilib qo'shish — tabrikda u belgilanadi (mention) |
+| `/edit ID Ism 15.03.1998` | admin | Ism va sanani o'zgartirish (`/edit ID 15.03` — faqat sana) |
+| `/remove ID` | admin | Yozuvni o'chirish |
+| `/settings time 09:00` | admin | Guruh tabrik vaqti |
+| `/settings remind 3` | admin | Tug'ilgan kunga 3 kun qolganda eslatma (`0` — o'chirish) |
+| `/settings upcoming 14` | admin | `/upcoming` necha kunni ko'rsatadi |
+| reply + `/setsticker` | admin | Stikerga reply qilib — tabrikdan keyin shu stiker yuboriladi (`/setsticker off`) |
 
-Shaxsiy chatda `/add` va `/remove` faqat `DEFAULT_GROUP_ID` guruhining
-adminlari uchun ishlaydi.
+`ID` ni `/list` dan oling. Shaxsiy chatda admin buyruqlari faqat
+`DEFAULT_GROUP_ID` guruhining adminlari uchun ishlaydi.
 
 29-fevralda tug'ilganlar kabisa bo'lmagan yillarda 28-fevralda tabriklanadi.
+Tabrik va eslatma har bir odam uchun kuniga bir marta yuboriladi; bot
+belgilangan vaqtdan keyin ishga tushsa, o'tkazib yuborilganlari darhol ketadi.
 
 ## Fayllar tuzilishi
 
@@ -52,8 +61,10 @@ adminlari uchun ishlaydi.
 birthdate-bot/
 ├── bot.py           # Asosiy kirish nuqtasi
 ├── database.py      # PostgreSQL bilan ishlash
-├── handlers.py      # /add, /list, /upcoming, /remove buyruqlari
-├── scheduler.py     # Kunlik tekshiruv va xabar yuborish
+├── handlers.py      # /add, /edit, /list, /find, /upcoming, /remove
+├── group_settings.py # /settings, /setsticker
+├── permissions.py   # Guruhni aniqlash va admin tekshiruvi
+├── scheduler.py     # Har daqiqalik tekshiruv: tabrik va oldindan eslatma
 ├── utils.py         # Vaqt mintaqasi, sana tekshiruvi, umumiy konstantalar
 ├── tests/           # pytest testlari
 └── deploy/          # systemd xizmati va deploy qo'llanmasi

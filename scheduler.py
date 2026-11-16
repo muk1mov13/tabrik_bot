@@ -1,13 +1,14 @@
 """
-scheduler.py — Har kuni belgilangan vaqtda tug'ilgan kunlarni tekshirib,
-tegishli guruhlarga tabrik xabarini yuboradi.
+scheduler.py — Har daqiqada tekshiradi: guruhning tabrik vaqti kelgan bo'lsa,
+bugungi tug'ilgan kunlarni tabriklaydi va oldindan eslatmalarni yuboradi.
+
+Har bir yozuv uchun last_notified / last_reminded saqlanadi, shuning uchun
+xabar kuniga bir martadan ortiq ketmaydi (restart bo'lsa ham). Bot tabrik
+vaqtidan keyin ishga tushsa, o'tkazib yuborilgan xabarlar darhol yuboriladi.
 """
 
 import logging
-import os
 import random
-from datetime import time
-from html import escape
 from typing import Optional
 
 from aiogram import Bot
@@ -16,7 +17,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 import database as db
-from utils import TZ, calc_age, now, today
+from utils import MONTH_NAMES, TZ, calc_age, mention, now
 
 logger = logging.getLogger(__name__)
 
@@ -27,69 +28,79 @@ GREETINGS = [
 ]
 
 
-def _build_message(name: str, year: Optional[int]) -> str:
-    text = random.choice(GREETINGS).format(name=f"<b>{escape(name)}</b>")
-    if year:
-        text += f"\n🎊 U bugun {calc_age(year, today())} yoshga to'ldi!"
+def build_greeting(row, on_date) -> str:
+    text = random.choice(GREETINGS).format(name=f"<b>{mention(row['name'], row['user_id'])}</b>")
+    if row["year"]:
+        text += f"\n🎊 U bugun {calc_age(row['year'], on_date)} yoshga to'ldi!"
     return text
 
 
-def get_notification_time() -> time:
-    value = os.getenv("NOTIFICATION_TIME", "08:00")
+def build_reminder(item: dict) -> str:
+    row, bday, days_left = item["row"], item["date"], item["days_left"]
+    text = (
+        f"⏰ {days_left} kundan keyin ({bday.day} {MONTH_NAMES[bday.month]}) — "
+        f"<b>{mention(row['name'], row['user_id'])}</b> ning tug'ilgan kuni!"
+    )
+    if row["year"]:
+        text += f" U {calc_age(row['year'], bday)} yoshga to'ladi."
+    return text + "\nSovg'a tayyorlashni unutmang 🎁"
+
+
+async def _send(bot: Bot, chat_id: int, text: str, sticker: Optional[str] = None) -> bool:
     try:
-        hour, minute = (int(part) for part in value.split(":"))
-        return time(hour, minute)
-    except ValueError:
-        logger.warning("NOTIFICATION_TIME noto'g'ri (%r), 08:00 ishlatiladi.", value)
-        return time(8, 0)
+        await bot.send_message(chat_id=chat_id, text=text)
+    except TelegramForbiddenError:
+        logger.warning("Bot guruhga yoza olmaydi (chiqarilgan bo'lishi mumkin): guruh=%s", chat_id)
+        return False
+    except TelegramAPIError as exc:
+        logger.error("Xabar yuborishda xatolik (guruh=%s): %s", chat_id, exc)
+        return False
+
+    if sticker:
+        try:
+            await bot.send_sticker(chat_id=chat_id, sticker=sticker)
+        except TelegramAPIError as exc:
+            # Stiker xatosi tabrikni qayta yuborishga sabab bo'lmasligi kerak
+            logger.warning("Stiker yuborilmadi (guruh=%s): %s", chat_id, exc)
+    return True
 
 
 async def check_and_notify(bot: Bot):
-    current = today()
-    rows = await db.get_pending_birthdays(current)
-    if not rows:
-        logger.info("Bugun uchun yuborilmagan tabrik yo'q.")
-        return
+    current = now()
+    on_date, at = current.date(), current.time().replace(second=0, microsecond=0)
 
-    for row in rows:
-        try:
-            await bot.send_message(
-                chat_id=row["group_id"],
-                text=_build_message(row["name"], row["year"]),
-            )
-        except TelegramForbiddenError:
-            logger.warning(
-                "Bot guruhga yoza olmaydi (chiqarilgan bo'lishi mumkin): guruh=%s",
-                row["group_id"],
-            )
-            continue
-        except TelegramAPIError as exc:
-            logger.error("Xabar yuborishda xatolik (guruh=%s): %s", row["group_id"], exc)
-            continue
+    for row in await db.get_pending_birthdays(on_date, at):
+        if await _send(bot, row["group_id"], build_greeting(row, on_date), row["sticker_file_id"]):
+            await db.mark_notified(row["id"], on_date)
+            logger.info("Tabrik yuborildi: guruh=%s, id=%s", row["group_id"], row["id"])
 
-        await db.mark_notified(row["id"], current)
-        logger.info("Xabar yuborildi: guruh=%s, id=%s", row["group_id"], row["id"])
+    for item in await db.get_pending_reminders(on_date, at):
+        row = item["row"]
+        if await _send(bot, row["group_id"], build_reminder(item)):
+            await db.mark_reminded(row["id"], on_date)
+            logger.info("Eslatma yuborildi: guruh=%s, id=%s", row["group_id"], row["id"])
 
 
-async def notify_if_missed(bot: Bot):
-    """Bot belgilangan vaqtdan keyin ishga tushgan bo'lsa, bugungi tabriklarni yuboradi."""
-    if now().time() >= get_notification_time():
+async def _safe_check(bot: Bot):
+    try:
         await check_and_notify(bot)
+    except Exception:
+        logger.exception("Tug'ilgan kunlarni tekshirishda xatolik")
 
 
 def setup_scheduler(bot: Bot) -> AsyncIOScheduler:
-    """Har kuni NOTIFICATION_TIME da (bot vaqt mintaqasida) tekshiruvchi scheduler."""
-    at = get_notification_time()
+    """Har daqiqada ishlaydigan tekshiruvchi scheduler (bot vaqt mintaqasida)."""
     scheduler = AsyncIOScheduler(timezone=TZ)
     scheduler.add_job(
-        check_and_notify,
-        trigger=CronTrigger(hour=at.hour, minute=at.minute, timezone=TZ),
+        _safe_check,
+        trigger=CronTrigger(minute="*", timezone=TZ),
         kwargs={"bot": bot},
-        id="daily_birthday_check",
+        id="birthday_check",
         replace_existing=True,
-        misfire_grace_time=3600,
+        max_instances=1,
         coalesce=True,
+        next_run_time=now(),  # ishga tushganda darhol bir marta tekshiradi
     )
     scheduler.start()
-    logger.info("Scheduler ishga tushdi: har kuni soat %s da (%s) tekshiriladi.", at.strftime("%H:%M"), TZ.key)
+    logger.info("Scheduler ishga tushdi: har daqiqada tekshiriladi (%s).", TZ.key)
     return scheduler
