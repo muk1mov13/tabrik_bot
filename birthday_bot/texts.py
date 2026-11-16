@@ -21,10 +21,11 @@ MONTH_NAMES = [
     "Iyul", "Avgust", "Sentabr", "Oktabr", "Noyabr", "Dekabr",
 ]
 
+# Tabrik qilinayotgan odam haqida hurmat bilan — ko'plikda gapiriladi
 GREETINGS = [
-    "🎉 Bugun {name} ning tug'ilgan kuni! Uni tabriklashni unutmang 🎂",
-    "🎂 E'tibor bering — bugun {name} tug'ilgan kunini nishonlamoqda! 🥳",
-    "🎈 Bugungi kun {name} uchun alohida — tug'ilgan kuni! Tabriklaymiz 🎁",
+    "🎉 Bugun {name}ning tug'ilgan kunlari! Ularni tabriklashni unutmang 🎂",
+    "🎂 E'tibor bering — bugun {name} tug'ilgan kunlarini nishonlamoqdalar! 🥳",
+    "🎈 Bugungi kun {name} uchun alohida — tug'ilgan kunlari! Chin dildan tabriklaymiz 🎁",
 ]
 
 HELP_TEXT = (
@@ -162,7 +163,7 @@ def upcoming_line(item: Upcoming) -> str:
 def greeting(b: Birthday, on_date: date, rng: random.Random = random) -> str:
     text = rng.choice(GREETINGS).format(name=f"<b>{mention(b.name, b.user_id)}</b>")
     if b.year:
-        text += f"\n🎊 U bugun {calc_age(b.year, on_date)} yoshga to'ldi!"
+        text += f"\n🎊 Bugun {calc_age(b.year, on_date)} yoshga to'ldilar!"
     return text
 
 
@@ -170,10 +171,10 @@ def reminder(item: Upcoming) -> str:
     b = item.birthday
     text = (
         f"⏰ {item.days_left} kundan keyin ({format_date(item.date.day, item.date.month)}) — "
-        f"<b>{mention(b.name, b.user_id)}</b> ning tug'ilgan kuni!"
+        f"<b>{mention(b.name, b.user_id)}</b>ning tug'ilgan kunlari!"
     )
     if b.year:
-        text += f" U {calc_age(b.year, item.date)} yoshga to'ladi."
+        text += f" {calc_age(b.year, item.date)} yoshga to'ladilar."
     return text + "\nSovg'a tayyorlashni unutmang 🎁"
 
 

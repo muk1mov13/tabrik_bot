@@ -3,6 +3,7 @@ from datetime import date, time
 
 from birthday_bot.models import Birthday, GroupSettings, Upcoming
 from birthday_bot.texts import (
+    GREETINGS,
     add_preview,
     added_text,
     greeting,
@@ -90,3 +91,16 @@ def test_add_preview_warns_about_duplicates():
     text = add_preview("Karim aka", 15, 3, None, [existing])
     assert "⚠️ Ro'yxatda allaqachon bor" in text and "1 Fevral" in text
     assert "Baribir saqlaymizmi?" in text
+
+
+def test_greetings_use_respectful_plural():
+    # Odam haqida hurmat bilan — ko'plikda gapiriladi
+    for i in range(len(GREETINGS)):
+        text = greeting(make(year=1960), date(2026, 5, 1), random.Random(i))
+        assert "tug'ilgan kunlari" in text and "66 yoshga to'ldilar" in text
+    for template in GREETINGS:
+        assert "kuni!" not in template and "Uni " not in template
+
+    item = Upcoming(birthday=make(year=1960, day=4), date=date(2026, 5, 4), days_left=3)
+    text = reminder(item)
+    assert "tug'ilgan kunlari" in text and "yoshga to'ladilar" in text
