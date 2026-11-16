@@ -24,7 +24,9 @@ RECORDS_PAGE_SIZE = 10
 TIME_CHOICES = [time(7, 0), time(8, 0), time(9, 0), time(10, 0), time(12, 0)]
 REMIND_CHOICES = [0, 1, 3, 7]
 CUSTOM_TIME = -1
+# request_users so'rovlari: yangi yozuv uchun odam tanlash / mavjud yozuvni bog'lash
 PICK_USER_REQUEST = 1
+PICK_LINK_REQUEST = 2
 
 
 class Menu(CallbackData, prefix="m"):
@@ -165,12 +167,12 @@ def groups_keyboard(groups: list[Group]) -> InlineKeyboardMarkup:
     return _kb(*[[_cb(g.title or str(g.group_id), PickGroup(group_id=g.group_id))] for g in groups])
 
 
-def pick_user_keyboard() -> ReplyKeyboardMarkup:
+def pick_user_keyboard(request_id: int = PICK_USER_REQUEST) -> ReplyKeyboardMarkup:
     """Odamni kontaktlardan tanlash — Telegram buni faqat oddiy klaviaturada beradi."""
     button = KeyboardButton(
         text="👤 Telegram'dan tanlash",
         request_users=KeyboardButtonRequestUsers(
-            request_id=PICK_USER_REQUEST, user_is_bot=False, max_quantity=1, request_name=True
+            request_id=request_id, user_is_bot=False, max_quantity=1, request_name=True
         ),
     )
     return ReplyKeyboardMarkup(keyboard=[[button]], resize_keyboard=True, one_time_keyboard=True)
@@ -233,6 +235,7 @@ def record_keyboard(group_id: int, record_id: int, page: int) -> InlineKeyboardM
     return _kb(
         [_cb("✏️ Ismni o'zgartirish", act("name"))],
         [_cb("📅 Sanani o'zgartirish", act("date"))],
+        [_cb("👤 Telegram'dan belgilash", act("link"))],
         [_cb("🗑 O'chirish", act("del"))],
         [_cb("⬅️ Orqaga", RecordPage(group_id=group_id, page=page))],
     )

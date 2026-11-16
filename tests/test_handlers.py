@@ -773,3 +773,23 @@ async def test_manage_export(send, db):
     # Boshqaruvchi bo'lmagan yuklab ololmaydi
     await send.click(ListTool(action="export", group_id=G).pack(), from_id=MEMBER)
     assert not any(isinstance(r, SendDocument) for r in send.session.requests)
+
+
+async def test_link_existing_record_to_telegram_user(send, db):
+    await admin_in_group(db)
+    a = await db.add_birthday(G, "Ali", 15, 3)
+    await db.add_birthday(G, "Vali", 1, 1, user_id=88)
+    link = RecordAction(action="link", group_id=G, record_id=a).pack()
+
+    await send.click(link)
+    assert isinstance(send.session.last_markup(), ReplyKeyboardMarkup)
+    taken = UsersShared(request_id=2, users=[SharedUser(user_id=88, first_name="Vali")])
+    texts = await send(None, users_shared=taken, chat_type="private")
+    assert "allaqachon" in texts[0] and "Vali" in texts[0]
+    assert (await db.get_birthday(G, a)).user_id is None
+
+    await send.click(link)
+    free = UsersShared(request_id=2, users=[SharedUser(user_id=77, first_name="Ali")])
+    texts = await send(None, users_shared=free, chat_type="private")
+    assert any('tg://user?id=77' in t for t in texts)
+    assert (await db.get_birthday(G, a)).user_id == 77

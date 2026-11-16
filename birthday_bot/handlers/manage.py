@@ -8,13 +8,20 @@ from aiogram import Bot, F, Router
 from aiogram.enums import ChatType
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import BufferedInputFile, CallbackQuery, InlineKeyboardMarkup, Message
+from aiogram.types import (
+    BufferedInputFile,
+    CallbackQuery,
+    InlineKeyboardMarkup,
+    Message,
+    ReplyKeyboardRemove,
+)
 
 from birthday_bot.config import Config
 from birthday_bot.database import Database
 from birthday_bot.dates import now
 from birthday_bot.handlers.ui import TEXT_INPUT, ensure_manager, show
 from birthday_bot.keyboards import (
+    PICK_LINK_REQUEST,
     RECORDS_PAGE_SIZE,
     ListTool,
     Menu,
@@ -23,6 +30,7 @@ from birthday_bot.keyboards import (
     cancel_keyboard,
     confirm_delete_keyboard,
     empty_list_keyboard,
+    pick_user_keyboard,
     record_keyboard,
     records_keyboard,
     search_results_keyboard,
@@ -30,16 +38,20 @@ from birthday_bot.keyboards import (
 from birthday_bot.models import Birthday
 from birthday_bot.parsing import ParseError, parse_date, parse_name
 from birthday_bot.texts import (
+    ASK_LINK_TEXT,
     ASK_NEW_DATE_TEXT,
     ASK_NEW_NAME_TEXT,
     ASK_SEARCH_TEXT,
     EMPTY_LIST_TEXT,
     EXPORT_CAPTION,
+    PICK_USER_HINT_TEXT,
     RECORD_GONE_TEXT,
     SAVED_TEXT,
     confirm_delete_text,
     deleted_text,
     export_text,
+    link_taken_text,
+    linked_text,
     record_card,
     records_title,
     search_results_text,
@@ -56,6 +68,7 @@ EXPORT_FILENAME = "tugilgan_kunlar.txt"
 class EditBirthday(StatesGroup):
     name = State()
     date = State()
+    user = State()  # Telegram foydalanuvchisini tanlash kutilmoqda
 
 
 class ManageSearch(StatesGroup):
@@ -167,6 +180,16 @@ async def cb_record(
             ASK_NEW_NAME_TEXT if action == "name" else ASK_NEW_DATE_TEXT,
             cancel_keyboard(group_id),
         )
+    elif action == "link":
+        await state.set_state(EditBirthday.user)
+        # pick_keyboard — bekor qilinganda tanlov klaviaturasi yopiladi (menu.cb_home)
+        await state.set_data(
+            {"group_id": group_id, "record_id": birthday.id, "page": page, "pick_keyboard": True}
+        )
+        await show(callback, ASK_LINK_TEXT, cancel_keyboard(group_id))
+        await callback.message.answer(
+            PICK_USER_HINT_TEXT, reply_markup=pick_user_keyboard(PICK_LINK_REQUEST)
+        )
 
 
 async def _edited_record(
@@ -190,6 +213,31 @@ async def _answer_card(message: Message, db: Database, config: Config, birthday:
         f"{SAVED_TEXT}\n\n{record_card(updated, now(config.timezone).date())}",
         reply_markup=record_keyboard(updated.group_id, updated.id, page),
     )
+
+
+@router.message(EditBirthday.user, F.users_shared.request_id == PICK_LINK_REQUEST)
+async def got_link_user(message: Message, bot: Bot, db: Database, config: Config, state: FSMContext):
+    found = await _edited_record(message, bot, db, state)
+    if found is None:
+        return
+    birthday, page = found
+    shared = message.users_shared.users[0]
+    name = " ".join(p for p in (shared.first_name, shared.last_name) if p) or birthday.name
+
+    other = await db.get_birthday_by_user(birthday.group_id, shared.user_id)
+    if other and other.id != birthday.id:
+        # Bitta odam ikki yozuvga bog'lansa, a'zo o'z yozuvini aniq topa olmaydi
+        await message.answer(
+            link_taken_text(name, shared.user_id, other.name), reply_markup=ReplyKeyboardRemove()
+        )
+        await message.answer(
+            record_card(birthday, now(config.timezone).date()),
+            reply_markup=record_keyboard(birthday.group_id, birthday.id, page),
+        )
+        return
+    await db.set_birthday_user(birthday.group_id, birthday.id, shared.user_id)
+    await message.answer(linked_text(name, shared.user_id), reply_markup=ReplyKeyboardRemove())
+    await _answer_card(message, db, config, birthday, page)
 
 
 @router.message(EditBirthday.name, TEXT_INPUT)

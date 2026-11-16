@@ -115,7 +115,11 @@ ASK_NEW_NAME_TEXT ="Yangi ismni yozing:"
 ASK_NEW_DATE_TEXT = "Yangi sanani yozing: <code>15.03</code> yoki <code>15.03.1980</code>"
 ASK_TIME_TEXT = "Tabrik vaqtini yozing, masalan <code>09:30</code>"
 EMPTY_LIST_TEXT = "Hali hech kim qo'shilmagan."
-ASK_SEARCH_TEXT = "🔎 Kimni qidiramiz? Ismning bir qismini yozing:"
+ASK_LINK_TEXT = (
+    "👤 Bu yozuv kimga tegishli? Pastdagi tugma bilan odamni Telegram'dan tanlang — "
+    "shunda tabrikda u belgilanadi."
+)
+ASK_SEARCH_TEXT ="🔎 Kimni qidiramiz? Ismning bir qismini yozing:"
 EXPORT_CAPTION = (
     "📤 Barcha tug'ilgan kunlar. Shu faylning matnini ➕ Qo'shish orqali qayta "
     "yuborsangiz — ro'yxat tiklanadi."
@@ -295,6 +299,17 @@ def deleted_text(name: str) -> str:
 
 def records_title(total: int) -> str:
     return f"📋 <b>Tug'ilgan kunlar</b> ({total} ta)\nKimnidir tanlang:"
+
+
+def link_taken_text(name: str, user_id: int, taken_by: str) -> str:
+    return (
+        f"❗ {mention(name, user_id)} allaqachon «{escape(taken_by)}» yozuviga bog'langan. "
+        "Boshqa odamni tanlang yoki o'sha yozuvni tekshiring."
+    )
+
+
+def linked_text(name: str, user_id: int) -> str:
+    return f"👤 Bog'landi: {mention(name, user_id)}"
 
 
 def search_results_text(query: str, count: int) -> str:
