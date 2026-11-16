@@ -28,6 +28,7 @@ class GroupSettings:
     remind_days: int = 0
     upcoming_days: int = 7
     sticker_file_id: Optional[str] = None
+    greeting_template: Optional[str] = None  # None — standart tabriklar
 
 
 @dataclass(frozen=True)

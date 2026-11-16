@@ -8,8 +8,9 @@ Sanalar 'YYYY-MM-DD', vaqtlar 'HH:MM' matn ko'rinishida saqlanadi — bu
 formatlarda matnli taqqoslash xronologik taqqoslash bilan bir xil.
 """
 
+import secrets
 from contextlib import asynccontextmanager
-from datetime import date, time, timedelta
+from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from typing import Any, Optional, Union
 
@@ -67,9 +68,26 @@ MIGRATIONS = [
         PRIMARY KEY (group_id, user_id)
     );
     """,
+    # 4 — ertalabki xabar, o'z tabrik matni, boshqaruvchi taklif havolalari
+    """
+    ALTER TABLE groups ADD COLUMN last_digest TEXT;
+    ALTER TABLE group_links ADD COLUMN digest INTEGER NOT NULL DEFAULT 1;
+    ALTER TABLE group_settings ADD COLUMN greeting_template TEXT;
+    CREATE TABLE manager_invites (
+        token TEXT PRIMARY KEY,
+        group_id INTEGER NOT NULL,
+        created_by INTEGER,
+        created_at TEXT NOT NULL,
+        used_by INTEGER
+    );
+    """,
 ]
 
-SETTING_FIELDS = {"notify_time", "remind_days", "upcoming_days", "sticker_file_id"}
+SETTING_FIELDS = {
+    "notify_time", "remind_days", "upcoming_days", "sticker_file_id", "greeting_template",
+}
+INVITE_LIFETIME = timedelta(days=7)
+DIGEST_LEAD = timedelta(hours=1)  # ertalabki xabar tabrikdan shuncha oldin
 
 
 def _to_birthday(row: aiosqlite.Row) -> Birthday:
@@ -182,6 +200,14 @@ class Database:
         )
         return _to_birthday(row) if row else None
 
+    async def set_birthday_user(self, group_id: int, record_id: int, user_id: int) -> bool:
+        """Yozuvni Telegram foydalanuvchisiga bog'laydi — tabrikda u belgilanadi."""
+        cursor = await self._execute(
+            "UPDATE birthdays SET user_id = ? WHERE group_id = ? AND id = ?",
+            (user_id, group_id, record_id),
+        )
+        return cursor.rowcount == 1
+
     async def get_birthday_by_user(self, group_id: int, user_id: int) -> Optional[Birthday]:
         """Telegram foydalanuvchisiga bog'langan yozuv (a'zo o'z yozuvini boshqaradi)."""
         row = await self._fetchone(
@@ -281,6 +307,9 @@ class Database:
                 "UPDATE OR IGNORE group_managers SET group_id = ? WHERE group_id = ?",
                 (new_id, old_id),
             )
+            await self._execute(
+                "UPDATE manager_invites SET group_id = ? WHERE group_id = ?", (new_id, old_id)
+            )
 
     # ---------- Tabrik va eslatmalar ----------
 
@@ -374,6 +403,7 @@ class Database:
             remind_days=row["remind_days"],
             upcoming_days=row["upcoming_days"],
             sticker_file_id=row["sticker_file_id"],
+            greeting_template=row["greeting_template"],
         )
 
     async def set_setting(self, group_id: int, field: str, value: Any):
@@ -468,3 +498,78 @@ class Database:
             "SELECT user_id FROM group_managers WHERE group_id = ? ORDER BY user_id", (group_id,)
         )
         return [row[0] for row in rows]
+
+    # ---------- Boshqaruvchi taklif havolalari ----------
+
+    async def create_invite(self, group_id: int, created_by: Optional[int], today: date) -> str:
+        token = secrets.token_urlsafe(9)
+        await self._execute(
+            "INSERT INTO manager_invites (token, group_id, created_by, created_at) VALUES (?, ?, ?, ?)",
+            (token, group_id, created_by, today.isoformat()),
+        )
+        return token
+
+    async def use_invite(
+        self, token: str, user_id: int, today: date
+    ) -> Optional[tuple[int, Optional[int]]]:
+        """
+        Havolani ishlatadi: (guruh, taklif qilgan) yoki None — havola yo'q,
+        ishlatilgan yoki eskirgan. UPDATE shartli, shuning uchun bir martalik.
+        """
+        oldest = (today - INVITE_LIFETIME).isoformat()
+        cursor = await self._execute(
+            """
+            UPDATE manager_invites SET used_by = ?
+            WHERE token = ? AND used_by IS NULL AND created_at > ?
+            """,
+            (user_id, token, oldest),
+        )
+        if cursor.rowcount != 1:
+            return None
+        row = await self._fetchone(
+            "SELECT group_id, created_by FROM manager_invites WHERE token = ?", (token,)
+        )
+        return row["group_id"], row["created_by"]
+
+    # ---------- Ertalabki xabar ----------
+
+    async def get_digest_due(self, on_date: date, at: time) -> list[Group]:
+        """Bugun hali ertalabki xabar ketmagan, vaqti (tabrikdan 1 soat oldin) kelgan guruhlar."""
+        rows = await self._fetchall(
+            """
+            SELECT g.*, COALESCE(s.notify_time, ?) AS notify_time
+            FROM groups g
+            LEFT JOIN group_settings s ON s.group_id = g.group_id
+            WHERE g.active = 1 AND g.last_digest IS NOT ?
+            ORDER BY g.group_id
+            """,
+            (self._default_time, on_date.isoformat()),
+        )
+        due = []
+        for row in rows:
+            notify = datetime.combine(on_date, parse_time(row["notify_time"]))
+            # Kun boshidan oldinga o'tib ketmaydi: 00:30 → 00:00
+            digest_at = max(notify - DIGEST_LEAD, datetime.combine(on_date, time(0, 0)))
+            if digest_at.time() <= at:
+                due.append(_to_group(row))
+        return due
+
+    async def mark_digest_sent(self, group_id: int, on_date: date):
+        await self._execute(
+            "UPDATE groups SET last_digest = ? WHERE group_id = ?", (on_date.isoformat(), group_id)
+        )
+
+    async def get_digest_enabled(self, user_id: int, group_id: int) -> bool:
+        row = await self._fetchone(
+            "SELECT digest FROM group_links WHERE user_id = ? AND group_id = ?", (user_id, group_id)
+        )
+        return row is None or bool(row["digest"])
+
+    async def set_digest_enabled(self, user_id: int, group_id: int, enabled: bool):
+        await self._execute(
+            """
+            INSERT INTO group_links (user_id, group_id, digest) VALUES (?, ?, ?)
+            ON CONFLICT (user_id, group_id) DO UPDATE SET digest = excluded.digest
+            """,
+            (user_id, group_id, int(enabled)),
+        )

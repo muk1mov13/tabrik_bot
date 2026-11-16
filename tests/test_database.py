@@ -193,3 +193,52 @@ async def test_birthday_by_user_and_same_name(db):
     assert await db.get_birthday_by_user(G, 78) is None
     assert [x.name for x in await db.find_same_name(G, "  karim   aka ")] == ["Karim Aka"]
     assert await db.find_same_name(G, "Karim") == []
+
+
+async def test_greeting_template_setting(db):
+    assert (await db.get_settings(G)).greeting_template is None
+    await db.set_setting(G, "greeting_template", "Tabriklaymiz, {ism}!")
+    assert (await db.get_settings(G)).greeting_template == "Tabriklaymiz, {ism}!"
+
+
+async def test_set_birthday_user(db):
+    a = await db.add_birthday(G, "Ali", 1, 1)
+    assert await db.set_birthday_user(G, a, 77)
+    assert (await db.get_birthday(G, a)).user_id == 77
+    assert not await db.set_birthday_user(-200, a, 78)  # boshqa guruh
+
+
+async def test_manager_invites(db):
+    d = date(2026, 11, 16)
+    token = await db.create_invite(G, created_by=1, today=d)
+    other = await db.create_invite(G, created_by=1, today=d)
+    assert token != other and len(token) >= 10
+
+    assert await db.use_invite("yo'q", 5, d) is None
+    assert await db.use_invite(token, 5, d) == (G, 1)
+    assert await db.use_invite(token, 6, d) is None  # bir martalik
+    # 7 kundan keyin eskiradi
+    assert await db.use_invite(other, 6, date(2026, 11, 24)) is None
+
+
+async def test_digest_settings_and_due(db):
+    d = date(2026, 5, 1)
+    await db.upsert_group(G, "Oila")                 # tabrik 08:00 (default) → xabar 07:00
+    await db.upsert_group(-200, "Ish")
+    await db.set_setting(-200, "notify_time", time(10, 0))
+    await db.upsert_group(-300, "Eski")
+    await db.set_group_active(-300, False)
+    await db.set_setting(-400, "notify_time", time(0, 30))  # 00:30 → 00:00 (kun boshidan oldin emas)
+    await db.upsert_group(-400, "Tun")
+
+    assert [g.group_id for g in await db.get_digest_due(d, time(6, 59))] == [-400]
+    assert [g.group_id for g in await db.get_digest_due(d, time(7, 0))] == [-400, G]
+    await db.mark_digest_sent(G, d)
+    assert [g.group_id for g in await db.get_digest_due(d, time(9, 0))] == [-400, -200]
+    assert G in [g.group_id for g in await db.get_digest_due(date(2026, 5, 2), time(7, 0))]
+
+    await db.link_user(5, G)
+    assert await db.get_digest_enabled(5, G)
+    await db.set_digest_enabled(5, G, False)
+    assert not await db.get_digest_enabled(5, G)
+    assert await db.get_digest_enabled(99, G)  # bog'lanmagan — standart yoqilgan
