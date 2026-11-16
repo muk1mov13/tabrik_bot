@@ -16,7 +16,7 @@ from typing import Any, Optional, Union
 import aiosqlite
 
 from birthday_bot.dates import birthday_keys_for, format_time, next_birthday, parse_time
-from birthday_bot.models import Birthday, GroupSettings, Upcoming
+from birthday_bot.models import Birthday, Group, GroupSettings, Upcoming
 
 MIGRATIONS = [
     # 1 — boshlang'ich sxema
@@ -44,6 +44,19 @@ MIGRATIONS = [
         sticker_file_id TEXT
     );
     """,
+    # 2 — bot turgan guruhlar va ularni boshqaradigan adminlar
+    """
+    CREATE TABLE groups (
+        group_id INTEGER PRIMARY KEY,
+        title TEXT NOT NULL DEFAULT '',
+        active INTEGER NOT NULL DEFAULT 1
+    );
+    CREATE TABLE group_admins (
+        user_id INTEGER NOT NULL,
+        group_id INTEGER NOT NULL,
+        PRIMARY KEY (user_id, group_id)
+    );
+    """,
 ]
 
 SETTING_FIELDS = {"notify_time", "remind_days", "upcoming_days", "sticker_file_id"}
@@ -59,6 +72,10 @@ def _to_birthday(row: aiosqlite.Row) -> Birthday:
         year=row["year"],
         user_id=row["user_id"],
     )
+
+
+def _to_group(row: aiosqlite.Row) -> Group:
+    return Group(group_id=row["group_id"], title=row["title"], active=bool(row["active"]))
 
 
 def _date_condition(d: date) -> tuple[str, list[int]]:
@@ -230,6 +247,13 @@ class Database:
                 "UPDATE OR IGNORE group_settings SET group_id = ? WHERE group_id = ?",
                 (new_id, old_id),
             )
+            await self._execute(
+                "UPDATE OR IGNORE groups SET group_id = ? WHERE group_id = ?", (new_id, old_id)
+            )
+            await self._execute(
+                "UPDATE OR IGNORE group_admins SET group_id = ? WHERE group_id = ?",
+                (new_id, old_id),
+            )
 
     # ---------- Tabrik va eslatmalar ----------
 
@@ -333,3 +357,52 @@ class Database:
             """,
             (group_id, value),
         )
+
+    # ---------- Guruhlar va adminlar ----------
+
+    async def upsert_group(self, group_id: int, title: str):
+        """Guruhni saqlaydi (yoki nomini yangilaydi) va faol deb belgilaydi."""
+        await self._execute(
+            """
+            INSERT INTO groups (group_id, title, active) VALUES (?, ?, 1)
+            ON CONFLICT (group_id) DO UPDATE SET title = excluded.title, active = 1
+            """,
+            (group_id, title),
+        )
+
+    async def set_group_active(self, group_id: int, active: bool):
+        await self._execute(
+            """
+            INSERT INTO groups (group_id, active) VALUES (?, ?)
+            ON CONFLICT (group_id) DO UPDATE SET active = excluded.active
+            """,
+            (group_id, int(active)),
+        )
+
+    async def get_group(self, group_id: int) -> Optional[Group]:
+        row = await self._fetchone("SELECT * FROM groups WHERE group_id = ?", (group_id,))
+        return _to_group(row) if row else None
+
+    async def link_admin(self, user_id: int, group_id: int):
+        await self._execute(
+            "INSERT OR IGNORE INTO group_admins (user_id, group_id) VALUES (?, ?)",
+            (user_id, group_id),
+        )
+
+    async def unlink_admin(self, user_id: int, group_id: int):
+        await self._execute(
+            "DELETE FROM group_admins WHERE user_id = ? AND group_id = ?", (user_id, group_id)
+        )
+
+    async def admin_groups(self, user_id: int) -> list[Group]:
+        """Foydalanuvchi bog'langan faol guruhlar (adminlik bu yerda tekshirilmaydi)."""
+        rows = await self._fetchall(
+            """
+            SELECT g.* FROM group_admins a
+            JOIN groups g ON g.group_id = a.group_id
+            WHERE a.user_id = ? AND g.active = 1
+            ORDER BY g.title COLLATE NOCASE, g.group_id
+            """,
+            (user_id,),
+        )
+        return [_to_group(row) for row in rows]

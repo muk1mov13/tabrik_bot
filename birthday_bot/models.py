@@ -35,3 +35,10 @@ class Upcoming:
     birthday: Birthday
     date: date
     days_left: int
+
+
+@dataclass(frozen=True)
+class Group:
+    group_id: int
+    title: str
+    active: bool = True

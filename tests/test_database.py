@@ -1,7 +1,7 @@
 from datetime import date, time
 
 from birthday_bot.database import Database
-from birthday_bot.models import GroupSettings
+from birthday_bot.models import Group, GroupSettings
 
 G = -100
 
@@ -114,7 +114,36 @@ async def test_settings_defaults_and_upsert(db):
 async def test_migrate_group(db):
     await db.add_birthday(G, "Ali", 1, 1)
     await db.set_setting(G, "remind_days", 5)
+    await db.upsert_group(G, "Oila")
+    await db.link_admin(1, G)
     await db.migrate_group(G, -1009)
     assert await db.count_birthdays(G) == 0
     assert await db.count_birthdays(-1009) == 1
     assert (await db.get_settings(-1009)).remind_days == 5
+    assert (await db.get_group(-1009)).title == "Oila"
+    assert [g.group_id for g in await db.admin_groups(1)] == [-1009]
+
+
+async def test_groups_and_admins(db):
+    assert await db.get_group(G) is None
+    await db.upsert_group(G, "Oila")
+    await db.upsert_group(-200, "Boshqa")
+    await db.upsert_group(G, "Oila 2")
+    assert await db.get_group(G) == Group(group_id=G, title="Oila 2", active=True)
+
+    await db.link_admin(1, G)
+    await db.link_admin(1, G)  # takror — xato bermaydi
+    await db.link_admin(1, -200)
+    await db.link_admin(2, G)
+    assert [g.title for g in await db.admin_groups(1)] == ["Boshqa", "Oila 2"]
+
+    await db.set_group_active(-200, False)
+    assert [g.group_id for g in await db.admin_groups(1)] == [G]
+    await db.unlink_admin(1, G)
+    assert await db.admin_groups(1) == []
+    assert [g.group_id for g in await db.admin_groups(2)] == [G]
+
+
+async def test_set_group_active_for_unknown_group(db):
+    await db.set_group_active(-300, False)
+    assert await db.get_group(-300) == Group(group_id=-300, title="", active=False)
