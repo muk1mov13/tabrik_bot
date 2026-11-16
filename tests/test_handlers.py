@@ -303,3 +303,30 @@ async def test_list_pagination(send, db):
     texts = await send(update=Update(update_id=next(_ids), callback_query=callback))
     assert "Odam 20" in texts[0] and "Odam 00" not in texts[0]
     assert any(isinstance(r, AnswerCallbackQuery) for r in send.session.requests)
+
+
+# ---------- Tugmali menyu ----------
+
+
+async def test_bot_added_to_group_greets_and_registers(send, db):
+    (reply,) = await send(update=membership_update("left", "member"))
+    assert "Salom" in reply
+    assert buttons(send.session.last_markup()) == {
+        "➕ Tug'ilgan kun qo'shish": f"https://t.me/MyBot?start=g_{G}"
+    }
+    assert await db.get_group(G) == Group(group_id=G, title="Oila", active=True)
+
+    # Holat o'zgarsa-yu, bot guruhda qolsa — qayta salomlashmaydi
+    assert await send(update=membership_update("member", "member")) == []
+
+    assert await send(update=membership_update("member", "left")) == []
+    assert (await db.get_group(G)).active is False
+
+
+async def test_group_menu_command(send, db):
+    (reply,) = await send("/menu")
+    assert "Salom" in reply
+    assert "➕ Tug'ilgan kun qo'shish" in buttons(send.session.last_markup())
+    assert await db.get_group(G) is not None
+    (reply,) = await send("/start")
+    assert "Salom" in reply

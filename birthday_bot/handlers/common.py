@@ -1,5 +1,5 @@
 """
-common.py — /start, /help va guruh chat ID o'zgarishi.
+common.py — /help va guruh chat ID o'zgarishi.
 """
 
 import logging
@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 router = Router(name="common")
 
 
-@router.message(Command("start", "help"))
+@router.message(Command("help"))
 async def cmd_help(message: Message):
     await message.answer(HELP_TEXT)
 
