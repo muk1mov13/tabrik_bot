@@ -13,7 +13,7 @@ from datetime import date, datetime
 from typing import Optional
 
 from aiogram import Bot
-from aiogram.exceptions import TelegramAPIError, TelegramForbiddenError
+from aiogram.exceptions import TelegramAPIError, TelegramForbiddenError, TelegramNetworkError
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
@@ -26,16 +26,21 @@ from birthday_bot.texts import greeting, reminder, send_failed_text
 logger = logging.getLogger(__name__)
 
 
-async def _send(bot: Bot, chat_id: int, text: str, sticker: Optional[str] = None) -> Optional[str]:
-    """Xabarni yuboradi; muvaffaqiyatli bo'lsa None, aks holda xato matni."""
+async def _send(
+    bot: Bot, chat_id: int, text: str, sticker: Optional[str] = None
+) -> Optional[TelegramAPIError]:
+    """Xabarni yuboradi; muvaffaqiyatli bo'lsa None, aks holda xatoning o'zi."""
     try:
         await bot.send_message(chat_id=chat_id, text=text)
+    except TelegramNetworkError as exc:
+        logger.warning("Internet bilan muammo, keyingi daqiqada qayta uriniladi (guruh=%s): %s", chat_id, exc)
+        return exc
     except TelegramForbiddenError as exc:
         logger.warning("Bot guruhga yoza olmaydi (chiqarilgan bo'lishi mumkin): guruh=%s", chat_id)
-        return exc.message
+        return exc
     except TelegramAPIError as exc:
         logger.error("Xabar yuborishda xatolik (guruh=%s): %s", chat_id, exc)
-        return exc.message
+        return exc
 
     if sticker:
         try:
@@ -47,18 +52,26 @@ async def _send(bot: Bot, chat_id: int, text: str, sticker: Optional[str] = None
 
 
 async def _report_failure(
-    bot: Bot, db: Database, group_id: int, on_date: date, error: str, failures: Optional[set]
+    bot: Bot,
+    db: Database,
+    group_id: int,
+    on_date: date,
+    error: TelegramAPIError,
+    failures: Optional[set],
 ):
     """
     Guruhga yozib bo'lmasa — boshqaruvchilar va adminlarga shaxsiy xabar, har guruh
-    uchun kuniga bir marta (tabrik har daqiqada qayta uriniladi).
+    uchun kuniga bir marta (tabrik har daqiqada qayta uriniladi). Internet uzilishi
+    guruh muammosi emas — u haqda xabar berilmaydi.
     """
+    if isinstance(error, TelegramNetworkError):
+        return
     if failures is None or (group_id, on_date) in failures:
         return
     failures.add((group_id, on_date))
 
     group = await db.get_group(group_id)
-    text = send_failed_text(group.title if group and group.title else str(group_id), error)
+    text = send_failed_text(group.title if group and group.title else str(group_id), error.message)
     # Boshqaruvchilar rol tekshirilmasdan: bot chiqarilgan bo'lsa rolni ham bilib bo'lmaydi
     recipients = set(await db.list_managers(group_id))
     for user_id in await db.linked_users(group_id):

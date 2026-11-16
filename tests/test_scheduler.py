@@ -3,7 +3,7 @@ from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 
 from aiogram.enums import ChatMemberStatus
-from aiogram.exceptions import TelegramForbiddenError
+from aiogram.exceptions import TelegramForbiddenError, TelegramNetworkError
 from aiogram.methods import SendMessage
 
 from birthday_bot.scheduler import check_and_notify
@@ -13,11 +13,12 @@ G = -100
 
 
 class FakeBot:
-    def __init__(self, fail_chats=(), admins=()):
+    def __init__(self, fail_chats=(), admins=(), error=TelegramForbiddenError):
         self.messages: list[tuple[int, str]] = []
         self.stickers: list[tuple[int, str]] = []
         self.fail_chats = set(fail_chats)
         self.admins = set(admins)
+        self.error = error
 
     async def get_chat_member(self, chat_id, user_id):
         status = ChatMemberStatus.CREATOR if user_id in self.admins else ChatMemberStatus.MEMBER
@@ -25,7 +26,7 @@ class FakeBot:
 
     async def send_message(self, chat_id, text):
         if chat_id in self.fail_chats:
-            raise TelegramForbiddenError(method=SendMessage(chat_id=chat_id, text=text), message="Forbidden")
+            raise self.error(method=SendMessage(chat_id=chat_id, text=text), message="Forbidden")
         self.messages.append((chat_id, text))
 
     async def send_sticker(self, chat_id, sticker):
@@ -87,3 +88,18 @@ async def test_failed_send_notifies_managers_once_a_day(db):
     await db.add_birthday(G, "Vali", 2, 5)
     await check_and_notify(bot, db, datetime(2026, 5, 2, 8, 0, tzinfo=TZ), failures)
     assert len(bot.messages) == 4
+
+
+async def test_network_error_is_retried_without_alarming_managers(db):
+    # Internet uzilishi guruh muammosi emas — keyingi daqiqada qayta uriniladi
+    await db.upsert_group(G, "Oila")
+    await db.add_birthday(G, "Ali", 1, 5)
+    await db.add_manager(G, 5)
+    failures = set()
+    offline = FakeBot(fail_chats={G}, error=TelegramNetworkError)
+    await check_and_notify(offline, db, datetime(2026, 5, 1, 8, 0, tzinfo=TZ), failures)
+    assert offline.messages == []
+
+    online = FakeBot()
+    await check_and_notify(online, db, datetime(2026, 5, 1, 8, 1, tzinfo=TZ), failures)
+    assert [chat for chat, _ in online.messages] == [G]
