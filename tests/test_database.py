@@ -147,3 +147,17 @@ async def test_groups_and_admins(db):
 async def test_set_group_active_for_unknown_group(db):
     await db.set_group_active(-300, False)
     assert await db.get_group(-300) == Group(group_id=-300, title="", active=False)
+
+
+async def test_inactive_groups_are_skipped(db):
+    d = date(2027, 5, 1)
+    await db.add_birthday(G, "Ali", 1, 5)
+    await db.add_birthday(G, "Vali", 4, 5)
+    await db.set_setting(G, "remind_days", 3)
+    await db.set_group_active(G, False)
+    assert await db.get_pending_greetings(d, time(8, 0)) == []
+    assert await db.get_pending_reminders(d, time(8, 0)) == []
+
+    await db.upsert_group(G, "Oila")
+    assert len(await db.get_pending_greetings(d, time(8, 0))) == 1
+    assert len(await db.get_pending_reminders(d, time(8, 0))) == 1

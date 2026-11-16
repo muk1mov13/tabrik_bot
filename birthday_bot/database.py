@@ -263,7 +263,8 @@ class Database:
         """
         Shu sanada nishonlanadigan, guruh tabrik vaqti kelgan va hali tabrik
         yuborilmagan yozuvlar — guruh stikeri bilan. Kabisa bo'lmagan yilda
-        29.02 lar 28.02 da qaytadi.
+        29.02 lar 28.02 da qaytadi. Bot chiqarilgan (nofaol) guruhlar o'tkazib
+        yuboriladi.
         """
         condition, params = _date_condition(on_date)
         rows = await self._fetchall(
@@ -271,7 +272,9 @@ class Database:
             SELECT b.*, s.sticker_file_id
             FROM birthdays b
             LEFT JOIN group_settings s ON s.group_id = b.group_id
+            LEFT JOIN groups g ON g.group_id = b.group_id
             WHERE {condition}
+              AND COALESCE(g.active, 1) = 1
               AND b.last_notified IS NOT ?
               AND COALESCE(s.notify_time, ?) <= ?
             ORDER BY b.id
@@ -301,7 +304,9 @@ class Database:
                 f"""
                 SELECT b.* FROM birthdays b
                 JOIN group_settings s ON s.group_id = b.group_id
+                LEFT JOIN groups g ON g.group_id = b.group_id
                 WHERE {condition}
+                  AND COALESCE(g.active, 1) = 1
                   AND s.remind_days = ?
                   AND COALESCE(s.notify_time, ?) <= ?
                   AND b.last_reminded IS NOT ?
