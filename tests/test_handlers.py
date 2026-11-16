@@ -32,9 +32,13 @@ from aiogram.types import (
     ChatMemberUpdated,
     InlineKeyboardMarkup,
     Message,
+    ReplyKeyboardMarkup,
+    ReplyKeyboardRemove,
+    SharedUser,
     Sticker,
     Update,
     User,
+    UsersShared,
 )
 
 from birthday_bot.config import Config
@@ -171,7 +175,7 @@ def membership_update(old: str, new: str, by: int = ADMIN) -> Update:
 
 def buttons(markup: Optional[InlineKeyboardMarkup]) -> dict[str, str]:
     """Tugma matni → callback_data (yoki URL)."""
-    if markup is None:
+    if not isinstance(markup, InlineKeyboardMarkup):
         return {}
     return {b.text: b.callback_data or b.url for row in markup.inline_keyboard for b in row}
 
@@ -418,10 +422,10 @@ async def test_forged_callback_rejected(send, db):
 
 async def test_add_flow(send, db):
     await admin_in_group(db)
-    (reply,) = await send.click(Menu(action="add", group_id=G).pack())
-    assert "Ismini yozing" in reply
-    (reply,) = await send("  Karim   aka ", chat_type="private")
-    assert "Sanasi?" in reply
+    question, hint = await send.click(Menu(action="add", group_id=G).pack())
+    assert "Ismini yozing" in question and "Telegram'dan" in hint
+    accepted, question = await send("  Karim   aka ", chat_type="private")
+    assert "Karim aka" in accepted and "Sanasi?" in question
     (reply,) = await send("31.02", chat_type="private")
     assert "mavjud emas" in reply and "Sanasi?" in reply
     (reply,) = await send("15.03.1980", chat_type="private")
@@ -441,8 +445,13 @@ async def test_add_flow(send, db):
 async def test_add_flow_cancel_and_command_interrupt(send, db):
     await admin_in_group(db)
     await send.click(Menu(action="add", group_id=G).pack())
-    (reply,) = await send.click(Cancel(group_id=G).pack())
-    assert "Nima qilamiz?" in reply
+    texts = await send.click(Cancel(group_id=G).pack())
+    assert "Nima qilamiz?" in texts[-1]
+    # "Telegram'dan tanlash" klaviaturasi yopiladi
+    assert any(
+        isinstance(r, SendMessage) and isinstance(r.reply_markup, ReplyKeyboardRemove)
+        for r in send.session.requests
+    )
     assert await send("Karim", chat_type="private") == []  # holat yo'q — e'tiborsiz
 
     await send.click(Menu(action="add", group_id=G).pack())
@@ -623,3 +632,22 @@ async def test_member_cannot_touch_others(send, db):
     await send.click(SelfAction(action="delyes", group_id=G).pack(), from_id=MEMBER)
     assert await db.get_birthday(G, other) is not None
     assert await send.click(SelfAction(action="add", group_id=G).pack(), from_id=OUTSIDER) == []
+
+
+async def test_add_flow_pick_telegram_user(send, db):
+    await admin_in_group(db)
+    await send.click(Menu(action="add", group_id=G).pack())
+    markup = send.session.last_markup()
+    assert isinstance(markup, ReplyKeyboardMarkup)
+    (button,) = [b for row in markup.keyboard for b in row]
+    assert button.request_users.max_quantity == 1 and not button.request_users.user_is_bot
+
+    shared = UsersShared(
+        request_id=1, users=[SharedUser(user_id=77, first_name="Sardor", last_name="Aka")]
+    )
+    accepted, question = await send(None, users_shared=shared, chat_type="private")
+    assert 'tg://user?id=77' in accepted and "Sanasi?" in question
+    await send("05.05", chat_type="private")
+    await send.click(SaveNew().pack())
+    (b,) = await db.list_birthdays(G)
+    assert (b.name, b.user_id) == ("Sardor Aka", 77)

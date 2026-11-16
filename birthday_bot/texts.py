@@ -90,7 +90,12 @@ ASK_NAME_TEXT = "Kimning tug'ilgan kuni? Ismini yozing.\nMasalan: <i>Karim aka</
 ASK_DATE_TEXT = (
     "Sanasi? Masalan: <code>15.03</code> yoki <code>15.03.1980</code> (yili ixtiyoriy)"
 )
-ASK_NEW_NAME_TEXT = "Yangi ismni yozing:"
+PICK_USER_HINT_TEXT = (
+    "Yoki odamni pastdagi tugma bilan Telegram'dan tanlang 👇 — "
+    "shunda tabrikda u belgilanadi."
+)
+CANCELLED_TEXT = "Bekor qilindi."
+ASK_NEW_NAME_TEXT ="Yangi ismni yozing:"
 ASK_NEW_DATE_TEXT = "Yangi sanani yozing: <code>15.03</code> yoki <code>15.03.1980</code>"
 ASK_TIME_TEXT = "Tabrik vaqtini yozing, masalan <code>09:30</code>"
 EMPTY_LIST_TEXT = "Hali hech kim qo'shilmagan."
@@ -197,6 +202,10 @@ def managers_text(managers: list[tuple[int, str]], is_admin: bool) -> str:
     if is_admin:
         lines.append(MANAGER_USAGE)
     return "\n".join(lines)
+
+
+def name_accepted_text(name: str, user_id: Optional[int] = None) -> str:
+    return f"👤 <b>{mention(name, user_id)}</b>"
 
 
 def add_preview(name: str, day: int, month: int, year: Optional[int]) -> str:

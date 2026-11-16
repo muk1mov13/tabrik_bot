@@ -13,7 +13,7 @@ from aiogram.enums import ChatType
 from aiogram.exceptions import TelegramAPIError
 from aiogram.filters import Command, CommandObject, CommandStart
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
+from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message, ReplyKeyboardRemove
 
 from birthday_bot.config import Config
 from birthday_bot.database import Database
@@ -33,6 +33,7 @@ from birthday_bot.models import Group
 from birthday_bot.parsing import parse_group_payload
 from birthday_bot.permissions import Role, get_role
 from birthday_bot.texts import (
+    CANCELLED_TEXT,
     CHOOSE_GROUP_TEXT,
     NO_GROUPS_TEXT,
     NOT_IN_GROUP_TEXT,
@@ -128,6 +129,9 @@ async def cb_home(
     config: Config,
     state: FSMContext,
 ):
+    if (await state.get_data()).get("pick_keyboard"):
+        # Qo'shish ism bosqichida bekor qilindi — tanlov klaviaturasini yopamiz
+        await bot.send_message(callback.from_user.id, CANCELLED_TEXT, reply_markup=ReplyKeyboardRemove())
     await state.clear()
     group_id = callback_data.group_id
     role = await ensure_role(callback, bot, db, group_id, Role.MEMBER)

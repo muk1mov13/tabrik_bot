@@ -8,7 +8,13 @@ bosishda rol qayta tekshiriladi (handlers/ui.py: ensure_role).
 from datetime import time
 
 from aiogram.filters.callback_data import CallbackData
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import (
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    KeyboardButton,
+    KeyboardButtonRequestUsers,
+    ReplyKeyboardMarkup,
+)
 
 from birthday_bot.dates import format_time
 from birthday_bot.models import Birthday, Group, GroupSettings
@@ -18,6 +24,7 @@ RECORDS_PAGE_SIZE = 10
 TIME_CHOICES = [time(7, 0), time(8, 0), time(9, 0), time(10, 0), time(12, 0)]
 REMIND_CHOICES = [0, 1, 3, 7]
 CUSTOM_TIME = -1
+PICK_USER_REQUEST = 1
 
 
 class Menu(CallbackData, prefix="m"):
@@ -147,6 +154,17 @@ def managers_keyboard(
 
 def groups_keyboard(groups: list[Group]) -> InlineKeyboardMarkup:
     return _kb(*[[_cb(g.title or str(g.group_id), PickGroup(group_id=g.group_id))] for g in groups])
+
+
+def pick_user_keyboard() -> ReplyKeyboardMarkup:
+    """Odamni kontaktlardan tanlash — Telegram buni faqat oddiy klaviaturada beradi."""
+    button = KeyboardButton(
+        text="👤 Telegram'dan tanlash",
+        request_users=KeyboardButtonRequestUsers(
+            request_id=PICK_USER_REQUEST, user_is_bot=False, max_quantity=1, request_name=True
+        ),
+    )
+    return ReplyKeyboardMarkup(keyboard=[[button]], resize_keyboard=True, one_time_keyboard=True)
 
 
 def cancel_keyboard(group_id: int) -> InlineKeyboardMarkup:
