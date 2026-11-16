@@ -208,6 +208,16 @@ def managers_text(managers: list[tuple[int, str]], is_admin: bool) -> str:
     return "\n".join(lines)
 
 
+def send_failed_text(group_title: str, error: str) -> str:
+    return (
+        f"⚠️ «{escape(group_title)}» guruhiga tabrik yubora olmadim.\n"
+        f"Sabab: <code>{escape(error)}</code>\n\n"
+        "Bot guruhda borligini va xabar yoza olishini tekshiring: guruh sozlamalarida "
+        "a'zolarga yozishga ruxsat bering yoki botni admin qiling. Muammo tuzalsa, "
+        "tabrik o'sha kuni o'zi yuboriladi."
+    )
+
+
 def name_accepted_text(name: str, user_id: Optional[int] = None) -> str:
     return f"👤 <b>{mention(name, user_id)}</b>"
 
