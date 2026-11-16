@@ -489,3 +489,30 @@ async def test_manage_pagination_and_other_group(send, db):
     )
     assert "endi yo'q" in reply
     assert await db.get_birthday(G2, other) is not None
+
+
+async def test_settings_menu(send, db):
+    await admin_in_group(db)
+    (reply,) = await send.click(Menu(action="settings", group_id=G).pack())
+    assert "08:00" in reply
+    kb = buttons(send.session.last_markup())
+    assert "✅ 08:00" in kb and "✅ 🔕 O'chiq" in kb
+
+    (reply,) = await send.click(kb["09:00"])
+    assert "09:00" in reply
+    assert (await db.get_settings(G)).notify_time == time(9, 0)
+    await send.click(kb["3 kun"])
+    assert (await db.get_settings(G)).remind_days == 3
+
+    await send.click(kb["✍️ Boshqa vaqt"])
+    (reply,) = await send("25:00", chat_type="private")
+    assert "❗" in reply
+    (reply,) = await send("09:30", chat_type="private")
+    assert "09:30" in reply
+    assert (await db.get_settings(G)).notify_time == time(9, 30)
+
+
+async def test_settings_menu_forged_by_member(send, db):
+    await db.upsert_group(G, "Oila")
+    assert await send.click(SetRemind(group_id=G, days=7).pack(), from_id=MEMBER) == []
+    assert (await db.get_settings(G)).remind_days == 0
