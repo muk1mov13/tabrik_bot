@@ -2,7 +2,7 @@
 bot.py — Botning asosiy kirish nuqtasi.
 
 Ishga tushirish:
-    export BOT_TOKEN="123456:ABC-DEF..."
+    cp .env.example .env   # va qiymatlarni to'ldiring
     python bot.py
 """
 
@@ -13,11 +13,11 @@ import os
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
+from dotenv import load_dotenv
 
 import database as db
-from dotenv import load_dotenv
 from handlers import router
-from scheduler import setup_scheduler
+from scheduler import notify_if_missed, setup_scheduler
 
 load_dotenv()
 
@@ -32,8 +32,8 @@ async def main():
     token = os.getenv("BOT_TOKEN")
     if not token:
         raise RuntimeError(
-            "BOT_TOKEN topilmadi. Avval quyidagini bajaring:\n"
-            "  export BOT_TOKEN='sizning_tokeningiz'"
+            "BOT_TOKEN topilmadi. .env fayliga qo'shing:\n"
+            "  BOT_TOKEN=sizning_tokeningiz"
         )
 
     await db.init_db()
@@ -42,12 +42,15 @@ async def main():
     dp = Dispatcher()
     dp.include_router(router)
 
-    setup_scheduler(bot)
+    scheduler = setup_scheduler(bot)
 
     logger.info("Bot ishga tushdi. To'xtatish uchun Ctrl+C bosing.")
     try:
+        await notify_if_missed(bot)
         await dp.start_polling(bot)
     finally:
+        scheduler.shutdown(wait=False)
+        await bot.session.close()
         await db.close_db()
 
 
