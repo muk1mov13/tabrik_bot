@@ -29,7 +29,9 @@ def test_group_invite_keyboard():
 def test_main_menu_keyboard():
     assert "🔄 Guruhni almashtirish" not in texts(main_menu_keyboard(G, False))
     kb = main_menu_keyboard(G, True)
-    assert texts(kb) == ["➕ Qo'shish", "📋 Ro'yxat", "⚙️ Sozlamalar", "🔄 Guruhni almashtirish"]
+    assert texts(kb) == [
+        "➕ Qo'shish", "📋 Ro'yxat", "⚙️ Sozlamalar", "👥 Boshqaruvchilar", "🔄 Guruhni almashtirish",
+    ]
     assert Menu.unpack(flat(kb)[0].callback_data) == Menu(action="add", group_id=G)
 
 

@@ -43,13 +43,15 @@ from birthday_bot.keyboards import (
     Cancel,
     Menu,
     RecordAction,
+    RemoveManager,
     SaveNew,
+    SelfAction,
     SetRemind,
 )
 from birthday_bot.models import Group
 
 G, G2 = -100123, -100456
-ADMIN, MEMBER = 1, 2
+ADMIN, MEMBER, OUTSIDER = 1, 2, 3
 _ids = count(1)
 
 
@@ -68,6 +70,8 @@ class MockSession(BaseSession):
             user = User(id=method.user_id, is_bot=False, first_name="U")
             if method.user_id == ADMIN:
                 return ChatMemberOwner(user=user, is_anonymous=False)
+            if method.user_id == OUTSIDER:
+                return ChatMemberLeft(user=user)
             return ChatMemberMember(user=user)
         if isinstance(method, GetChat):
             return ChatFullInfo(
@@ -343,7 +347,9 @@ async def test_deep_link_admin_gets_menu(send, db):
     await db.upsert_group(G, "Oila")
     (reply,) = await send(f"/start g_{G}", chat_type="private")
     assert "Oila" in reply
-    assert list(buttons(send.session.last_markup())) == ["➕ Qo'shish", "📋 Ro'yxat", "⚙️ Sozlamalar"]
+    assert list(buttons(send.session.last_markup())) == [
+        "➕ Qo'shish", "📋 Ro'yxat", "⚙️ Sozlamalar", "👥 Boshqaruvchilar",
+    ]
     assert [g.group_id for g in await db.linked_groups(ADMIN)] == [G]
     # Keyingi safar havolasiz ham menyu ochiladi
     (reply,) = await send("/start", chat_type="private")
@@ -356,11 +362,19 @@ async def test_deep_link_unknown_group_fetches_title(send, db):
     assert (await db.get_group(G)).title == "Oila"
 
 
-async def test_deep_link_non_admin_rejected(send, db):
+async def test_deep_link_member_gets_own_menu(send, db):
     await db.upsert_group(G, "Oila")
     (reply,) = await send(f"/start g_{G}", from_id=MEMBER, chat_type="private")
-    assert "admindan so'rang" in reply
-    assert await db.linked_groups(MEMBER) == []
+    assert "Oila" in reply
+    assert list(buttons(send.session.last_markup())) == ["🎂 Tug'ilgan kunimni qo'shish"]
+    assert [g.group_id for g in await db.linked_groups(MEMBER)] == [G]
+
+
+async def test_deep_link_outsider_rejected(send, db):
+    await db.upsert_group(G, "Oila")
+    (reply,) = await send(f"/start g_{G}", from_id=OUTSIDER, chat_type="private")
+    assert "a'zosi emassiz" in reply
+    assert await db.linked_groups(OUTSIDER) == []
 
 
 async def test_start_without_groups_explains(send):
@@ -387,17 +401,17 @@ async def test_many_groups_choose_and_switch(send, db):
     assert "Qaysi guruh" in reply
 
 
-async def test_lost_admin_rights_unlinks(send, db):
+async def test_left_group_unlinks(send, db):
     await db.upsert_group(G, "Oila")
-    await db.link_user(MEMBER, G)
-    (reply,) = await send("/start", from_id=MEMBER, chat_type="private")
+    await db.link_user(OUTSIDER, G)
+    (reply,) = await send("/start", from_id=OUTSIDER, chat_type="private")
     assert "guruhingizga qo'shing" in reply
-    assert await db.linked_groups(MEMBER) == []
+    assert await db.linked_groups(OUTSIDER) == []
 
 
 async def test_forged_callback_rejected(send, db):
     await db.upsert_group(G, "Oila")
-    assert await send.click(Menu(action="home", group_id=G).pack(), from_id=MEMBER) == []
+    assert await send.click(Menu(action="add", group_id=G).pack(), from_id=MEMBER) == []
     alert = send.session.last_alert()
     assert alert.show_alert and "⛔" in alert.text
 
@@ -552,3 +566,26 @@ async def test_admin_appoints_and_removes_manager(send, db):
     (reply,) = await send("/manager", from_id=MEMBER, reply_to=target)
     assert "⛔" in reply
     assert not await db.is_manager(G, 77)
+
+
+async def test_managers_list_admin_removes(send, db):
+    await admin_in_group(db)
+    await db.add_manager(G, MEMBER)
+    (reply,) = await send.click(Menu(action="home", group_id=G).pack())
+    menu = buttons(send.session.last_markup())
+    (reply,) = await send.click(menu["👥 Boshqaruvchilar"])
+    assert 'tg://user?id=2' in reply and "/manager" in reply
+    (reply,) = await send.click(buttons(send.session.last_markup())["🗑 U"])
+    assert not await db.is_manager(G, MEMBER)
+    assert "Hali boshqaruvchi yo'q" in reply
+
+
+async def test_manager_sees_list_but_cannot_remove(send, db):
+    await db.upsert_group(G, "Oila")
+    await db.add_manager(G, MEMBER)
+    await db.add_manager(G, 77)
+    (reply,) = await send.click(Menu(action="managers", group_id=G).pack(), from_id=MEMBER)
+    assert 'tg://user?id=77' in reply
+    assert not any(t.startswith("🗑") for t in buttons(send.session.last_markup()))
+    assert await send.click(RemoveManager(group_id=G, user_id=77).pack(), from_id=MEMBER) == []
+    assert await db.is_manager(G, 77)

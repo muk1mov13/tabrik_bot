@@ -59,6 +59,16 @@ class SetRemind(CallbackData, prefix="sr"):
     days: int
 
 
+class RemoveManager(CallbackData, prefix="rm"):
+    group_id: int
+    user_id: int
+
+
+class SelfAction(CallbackData, prefix="me"):
+    action: str  # add | date | save | del | delyes — faqat o'z yozuvi
+    group_id: int
+
+
 def _kb(*rows: list[InlineKeyboardButton]) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[row for row in rows if row])
 
@@ -86,11 +96,53 @@ def main_menu_keyboard(group_id: int, many_groups: bool) -> InlineKeyboardMarkup
             _cb("➕ Qo'shish", Menu(action="add", group_id=group_id)),
             _cb("📋 Ro'yxat", Menu(action="list", group_id=group_id)),
         ],
-        [_cb("⚙️ Sozlamalar", Menu(action="settings", group_id=group_id))],
+        [
+            _cb("⚙️ Sozlamalar", Menu(action="settings", group_id=group_id)),
+            _cb("👥 Boshqaruvchilar", Menu(action="managers", group_id=group_id)),
+        ],
     ]
     if many_groups:
         rows.append([_cb("🔄 Guruhni almashtirish", Menu(action="groups", group_id=group_id))])
     return _kb(*rows)
+
+
+def member_menu_keyboard(group_id: int, has_record: bool, many_groups: bool) -> InlineKeyboardMarkup:
+    if has_record:
+        rows = [
+            [_cb("📅 Sanani o'zgartirish", SelfAction(action="date", group_id=group_id))],
+            [_cb("🗑 O'chirish", SelfAction(action="del", group_id=group_id))],
+        ]
+    else:
+        rows = [[_cb("🎂 Tug'ilgan kunimni qo'shish", SelfAction(action="add", group_id=group_id))]]
+    if many_groups:
+        rows.append([_cb("🔄 Guruhni almashtirish", Menu(action="groups", group_id=group_id))])
+    return _kb(*rows)
+
+
+def self_confirm_keyboard(group_id: int) -> InlineKeyboardMarkup:
+    return _kb([
+        _cb("✅ Saqlash", SelfAction(action="save", group_id=group_id)),
+        _cb("❌ Bekor qilish", Cancel(group_id=group_id)),
+    ])
+
+
+def self_delete_keyboard(group_id: int) -> InlineKeyboardMarkup:
+    return _kb([
+        _cb("Ha, o'chirish", SelfAction(action="delyes", group_id=group_id)),
+        _cb("Yo'q", Menu(action="home", group_id=group_id)),
+    ])
+
+
+def managers_keyboard(
+    group_id: int, managers: list[tuple[int, str]], can_remove: bool
+) -> InlineKeyboardMarkup:
+    rows = []
+    if can_remove:
+        rows = [
+            [_cb(f"🗑 {name}", RemoveManager(group_id=group_id, user_id=user_id))]
+            for user_id, name in managers
+        ]
+    return _kb(*rows, [home_button(group_id)])
 
 
 def groups_keyboard(groups: list[Group]) -> InlineKeyboardMarkup:

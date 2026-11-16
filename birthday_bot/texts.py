@@ -64,10 +64,16 @@ MANAGER_USAGE = (
     "Olib tashlash: reply qilib <code>/manager off</code>."
 )
 MANAGER_ADMIN_ONLY_TEXT = "⛔ Boshqaruvchilarni faqat guruh adminlari tayinlaydi."
-NOT_ADMIN_TEXT = (
-    "⛔ Qo'shish faqat guruh adminlariga ruxsat etilgan. "
-    "Tug'ilgan kuningizni qo'shishni admindan so'rang 🙂"
+NOT_IN_GROUP_TEXT = (
+    "⛔ Siz bu guruh a'zosi emassiz. Guruhga qo'shilgach, tugmani qayta bosing."
 )
+ASK_OWN_DATE_TEXT = (
+    "Tug'ilgan kuningiz qachon? Masalan: <code>15.03</code> yoki "
+    "<code>15.03.1990</code> (yili ixtiyoriy)"
+)
+OWN_SAVED_TEXT = "✅ Saqlandi! U kuni guruhda tabriklayman 🎉"
+OWN_DELETED_TEXT = "🗑 Tug'ilgan kuningiz o'chirildi."
+OWN_DELETE_CONFIRM_TEXT = "🗑 Tug'ilgan kuningiz ro'yxatdan o'chirilsinmi?"
 # Callback alert — oddiy matn (HTML emas), 200 belgigacha
 NOT_ADMIN_ALERT = "⛔ Bu amal faqat guruh adminlari va boshqaruvchilariga ruxsat etilgan."
 STALE_TEXT = "Bu menyu eskirgan. /menu ni bosing."
@@ -172,6 +178,25 @@ def settings_text(s: GroupSettings) -> str:
 
 def menu_text(title: str) -> str:
     return f"🏠 <b>{escape(title) or 'Guruh'}</b>\n\nNima qilamiz?"
+
+
+def member_menu_text(title: str, own: Optional[Birthday], today: date) -> str:
+    header = f"🏠 <b>{escape(title) or 'Guruh'}</b>\n\n"
+    if own is None:
+        return header + "Tug'ilgan kuningizni qo'shing — u kuni guruhda tabriklayman 🎉"
+    return header + "Sizning yozuvingiz:\n" + record_card(own, today)
+
+
+def managers_text(managers: list[tuple[int, str]], is_admin: bool) -> str:
+    lines = ["👥 <b>Boshqaruvchilar</b>\n"]
+    if managers:
+        lines.extend(f"• {mention(name, user_id)}" for user_id, name in managers)
+    else:
+        lines.append("Hali boshqaruvchi yo'q.")
+    lines.append("\nGuruh adminlari ham tug'ilgan kunlarni boshqaradi.")
+    if is_admin:
+        lines.append(MANAGER_USAGE)
+    return "\n".join(lines)
 
 
 def add_preview(name: str, day: int, month: int, year: Optional[int]) -> str:
