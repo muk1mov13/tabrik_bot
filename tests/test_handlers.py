@@ -442,3 +442,50 @@ async def test_add_flow_rejects_non_admin(send, db):
     await db.upsert_group(G, "Oila")
     assert await send.click(Menu(action="add", group_id=G).pack(), from_id=MEMBER) == []
     assert await send("Karim", from_id=MEMBER, chat_type="private") == []
+
+
+async def test_manage_list_edit_delete(send, db):
+    await admin_in_group(db)
+    a = await db.add_birthday(G, "Ali", 15, 3, 1990)
+    (reply,) = await send.click(Menu(action="list", group_id=G).pack())
+    assert "(1 ta)" in reply
+    (reply,) = await send.click(buttons(send.session.last_markup())["Ali — 15 Mart"])
+    assert "15 Mart 1990" in reply
+    card = buttons(send.session.last_markup())
+
+    await send.click(card["✏️ Ismni o'zgartirish"])
+    (reply,) = await send("Ali aka", chat_type="private")
+    assert "Saqlandi" in reply and "Ali aka" in reply
+
+    await send.click(card["📅 Sanani o'zgartirish"])
+    (reply,) = await send("bugun", chat_type="private")
+    assert "❗" in reply
+    (reply,) = await send("16.03", chat_type="private")
+    assert "16 Mart" in reply
+    b = await db.get_birthday(G, a)
+    assert (b.name, b.day, b.month, b.year) == ("Ali aka", 16, 3, None)
+
+    (reply,) = await send.click(card["🗑 O'chirish"])
+    assert "rostdan" in reply
+    (reply,) = await send.click(buttons(send.session.last_markup())["Ha, o'chirish"])
+    assert "O'chirildi" in reply and "Hali hech kim" in reply
+    assert await db.count_birthdays(G) == 0
+
+
+async def test_manage_pagination_and_other_group(send, db):
+    await admin_in_group(db)
+    for i in range(12):
+        await db.add_birthday(G, f"Odam {i:02}", 1 + i, 1)
+    other = await db.add_birthday(G2, "Begona", 1, 1)
+    await send.click(Menu(action="list", group_id=G).pack())
+    kb = buttons(send.session.last_markup())
+    assert "Odam 09 — 10 Yanvar" in kb and "Odam 10 — 11 Yanvar" not in kb
+    await send.click(kb["➡️"])
+    assert "Odam 11 — 12 Yanvar" in buttons(send.session.last_markup())
+
+    # Boshqa guruh yozuviga o'z guruhi ID'si orqali tegib bo'lmaydi
+    (reply,) = await send.click(
+        RecordAction(action="delyes", group_id=G, record_id=other).pack()
+    )
+    assert "endi yo'q" in reply
+    assert await db.get_birthday(G2, other) is not None

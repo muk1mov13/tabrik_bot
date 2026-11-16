@@ -6,7 +6,7 @@ qarang).
 
 from aiogram import Router
 
-from birthday_bot.handlers import add_flow, birthdays, common, group_events, menu, settings
+from birthday_bot.handlers import add_flow, birthdays, common, group_events, manage, menu, settings
 from birthday_bot.handlers.ui import ClearStateOnCommand
 
 
@@ -20,5 +20,6 @@ def build_router() -> Router:
         birthdays.router,
         settings.router,
         add_flow.router,
+        manage.router,
     )
     return root
