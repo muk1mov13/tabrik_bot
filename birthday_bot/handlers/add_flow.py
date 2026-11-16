@@ -15,21 +15,26 @@ from birthday_bot.handlers.ui import TEXT_INPUT, ensure_manager, show
 from birthday_bot.keyboards import (
     PICK_USER_REQUEST,
     Menu,
+    SaveBulk,
     SaveNew,
     add_confirm_keyboard,
     after_add_keyboard,
+    bulk_confirm_keyboard,
     cancel_keyboard,
     pick_user_keyboard,
 )
 from birthday_bot.models import MAX_NAME_LENGTH
-from birthday_bot.parsing import ParseError, parse_date, parse_name
+from birthday_bot.parsing import BulkResult, ParseError, parse_bulk, parse_date, parse_name
 from birthday_bot.texts import (
     ASK_DATE_TEXT,
     ASK_NAME_TEXT,
+    BULK_ACCEPTED_TEXT,
     PICK_USER_HINT_TEXT,
     STALE_TEXT,
     add_preview,
     added_text,
+    bulk_added_text,
+    bulk_preview,
     name_accepted_text,
 )
 
@@ -41,6 +46,7 @@ class AddBirthday(StatesGroup):
     name = State()
     date = State()
     confirm = State()
+    bulk = State()  # ro'yxat tasdiqlanishini kutmoqda
 
 
 @router.callback_query(Menu.filter(F.action == "add"))
@@ -65,7 +71,13 @@ async def _accept_name(message: Message, state: FSMContext, name: str, user_id=N
 
 
 @router.message(AddBirthday.name, TEXT_INPUT)
-async def got_name(message: Message, state: FSMContext):
+async def got_name(message: Message, state: FSMContext, db: Database, config: Config):
+    # Sana bilan yozilgan qator(lar) — ro'yxat: "Adolatxon 27 may 2021"
+    bulk = parse_bulk(message.text, now(config.timezone).date())
+    if bulk.entries or "\n" in message.text.strip():
+        await _bulk_preview(message, state, db, bulk)
+        return
+
     try:
         name = parse_name(message.text)
     except ParseError as exc:
@@ -73,6 +85,42 @@ async def got_name(message: Message, state: FSMContext):
         await message.answer(f"❗ {exc}\n\n{ASK_NAME_TEXT}", reply_markup=cancel_keyboard(group_id))
         return
     await _accept_name(message, state, name)
+
+
+async def _bulk_preview(message: Message, state: FSMContext, db: Database, bulk: BulkResult):
+    group_id = (await state.get_data())["group_id"]
+    entries = [
+        {"name": e.name, "day": e.day, "month": e.month, "year": e.year} for e in bulk.entries
+    ]
+    existing = {b.name.casefold() for b in await db.list_birthdays(group_id)}
+    text = bulk_preview(entries, bulk.errors, existing)
+    if not entries:
+        # Hech narsa tushunilmadi — ism savolida qolamiz
+        await message.answer(text, reply_markup=cancel_keyboard(group_id))
+        return
+    await state.update_data(entries=entries, pick_keyboard=False)
+    await state.set_state(AddBirthday.bulk)
+    await message.answer(BULK_ACCEPTED_TEXT, reply_markup=ReplyKeyboardRemove())
+    await message.answer(text, reply_markup=bulk_confirm_keyboard(group_id, len(entries)))
+
+
+@router.callback_query(AddBirthday.bulk, SaveBulk.filter())
+async def cb_save_bulk(callback: CallbackQuery, bot: Bot, db: Database, state: FSMContext):
+    data = await state.get_data()
+    await state.clear()
+    group_id = data["group_id"]
+    if not await ensure_manager(callback, bot, db, group_id):
+        return
+    for e in data["entries"]:
+        await db.add_birthday(
+            group_id=group_id,
+            name=e["name"],
+            day=e["day"],
+            month=e["month"],
+            year=e["year"],
+            added_by=callback.from_user.id,
+        )
+    await show(callback, bulk_added_text(len(data["entries"])), after_add_keyboard(group_id))
 
 
 @router.message(AddBirthday.name, F.users_shared.request_id == PICK_USER_REQUEST)
@@ -131,6 +179,7 @@ async def cb_save(callback: CallbackQuery, bot: Bot, db: Database, state: FSMCon
 
 
 @router.callback_query(SaveNew.filter())
+@router.callback_query(SaveBulk.filter())
 async def cb_save_stale(callback: CallbackQuery):
     # Holat yo'q: allaqachon saqlangan, bekor qilingan yoki bot qayta ishga tushgan
     await callback.answer(STALE_TEXT, show_alert=True)

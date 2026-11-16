@@ -27,6 +27,9 @@ avtomatik yaratiladi.
    **boshqaruvchi** bo'ladi: unda **➕ Qo'shish**, **📋 Ro'yxat**, **⚙️ Sozlamalar** va
    **👥 Boshqaruvchilar** tugmalari bor. Bot ism va sanani so'raydi, odamni
    **👤 Telegram'dan tanlash** ham mumkin — shunda tabrikda u belgilanadi.
+   Bir nechta odamni birdaniga qo'shish uchun ism o'rniga ro'yxat yuboring — har
+   qatorga bittadan (`Adolatxon 27 may 2021`, `Usmonbek 29.11.2022`). Bot saqlashdan
+   oldin hammasini ko'rsatadi, tushunilmagan qatorlar va takrorlarni aytadi.
 3. Guruhning boshqa a'zolari ham tugmani bosib, **o'z** tug'ilgan kunini qo'sha oladi.
 4. Tug'ilgan kun kelganda bot guruhda tabriklaydi — hamma xabardor bo'ladi.
 

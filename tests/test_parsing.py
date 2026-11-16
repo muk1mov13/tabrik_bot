@@ -6,6 +6,7 @@ from birthday_bot.parsing import (
     ParsedBirthday,
     ParseError,
     parse_birthday,
+    parse_bulk,
     parse_date,
     parse_edit,
     parse_group_payload,
@@ -67,3 +68,43 @@ def test_parse_group_payload():
     assert parse_group_payload("g_5") == 5
     for bad in ["x_1", "g_", "g_1a", "", "-100123"]:
         assert parse_group_payload(bad) is None
+
+
+@pytest.mark.parametrize(
+    "text, expected",
+    [
+        ("Adolatxon 27 may 2021", ParsedBirthday("Adolatxon", 27, 5, 2021)),
+        ("Usmonbek 29 noyabr 2022", ParsedBirthday("Usmonbek", 29, 11, 2022)),
+        ("Hamdamov Muqim bobom 24 mart", ParsedBirthday("Hamdamov Muqim bobom", 24, 3)),
+        ("Ali 29-noyabr 2022-yil", ParsedBirthday("Ali", 29, 11, 2022)),
+        ("Ali 1 Sentyabr 1990 yil", ParsedBirthday("Ali", 1, 9, 1990)),
+        ("Алишер 1 февраль 2000", ParsedBirthday("Алишер", 1, 2, 2000)),
+        ("Вали 9 мая", ParsedBirthday("Вали", 9, 5)),
+        ("15 mart", ParsedBirthday(None, 15, 3)),
+    ],
+)
+def test_parse_birthday_month_names(text, expected):
+    assert parse_birthday(text, TODAY) == expected
+
+
+def test_parse_birthday_unknown_month():
+    with pytest.raises(ParseError, match="Oy"):
+        parse_birthday("Ali 15 martobr", TODAY)
+    with pytest.raises(ParseError, match="mavjud emas"):
+        parse_birthday("Ali 31 iyun", TODAY)
+
+
+def test_parse_bulk():
+    text = """
+    Adolatxon 27 may 2021
+    • Usmonbek 29 noyabr 2022
+    2) Alibek 19.12.2022
+
+    Salimaxon 31 fevral 2025
+    Faqat ism
+    """
+    result = parse_bulk(text, TODAY)
+    assert [e.name for e in result.entries] == ["Adolatxon", "Usmonbek", "Alibek"]
+    assert [line for line, _ in result.errors] == ["Salimaxon 31 fevral 2025", "Faqat ism"]
+    # Sanasiz qator ism bo'lishi kerak — bunda ism yo'q
+    assert parse_bulk("27 may 2021", TODAY).errors[0][1] == "Ism ko'rsatilmagan."

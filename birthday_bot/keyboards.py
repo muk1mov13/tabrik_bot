@@ -44,6 +44,10 @@ class SaveNew(CallbackData, prefix="sv"):
     pass
 
 
+class SaveBulk(CallbackData, prefix="sl"):
+    pass
+
+
 class RecordPage(CallbackData, prefix="rp"):
     group_id: int
     page: int
@@ -173,6 +177,13 @@ def cancel_keyboard(group_id: int) -> InlineKeyboardMarkup:
 
 def add_confirm_keyboard(group_id: int) -> InlineKeyboardMarkup:
     return _kb([_cb("✅ Saqlash", SaveNew()), _cb("❌ Bekor qilish", Cancel(group_id=group_id))])
+
+
+def bulk_confirm_keyboard(group_id: int, count: int) -> InlineKeyboardMarkup:
+    return _kb(
+        [_cb(f"✅ Hammasini saqlash ({count})", SaveBulk())],
+        [_cb("❌ Bekor qilish", Cancel(group_id=group_id))],
+    )
 
 
 def after_add_keyboard(group_id: int) -> InlineKeyboardMarkup:

@@ -96,9 +96,15 @@ NO_GROUPS_TEXT = (
     "boshqaradi, qolganlar o'z tug'ilgan kunini qo'sha oladi."
 )
 CHOOSE_GROUP_TEXT = "Qaysi guruh bilan ishlaymiz?"
-ASK_NAME_TEXT = "Kimning tug'ilgan kuni? Ismini yozing.\nMasalan: <i>Karim aka</i>"
+ASK_NAME_TEXT = (
+    "Kimning tug'ilgan kuni? Ismini yozing.\nMasalan: <i>Karim aka</i>\n\n"
+    "Bir nechta odamni birdaniga ham qo'shsa bo'ladi — har qatorga bittadan:\n"
+    "<code>Adolatxon 27 may 2021\nUsmonbek 29.11.2022</code>"
+)
+BULK_ACCEPTED_TEXT = "📋 Ro'yxat qabul qilindi."
 ASK_DATE_TEXT = (
-    "Sanasi? Masalan: <code>15.03</code> yoki <code>15.03.1980</code> (yili ixtiyoriy)"
+    "Sanasi? Masalan: <code>15.03</code>, <code>15.03.1980</code> yoki "
+    "<code>15 mart 1980</code> (yili ixtiyoriy)"
 )
 PICK_USER_HINT_TEXT = (
     "Yoki odamni pastdagi tugma bilan Telegram'dan tanlang 👇 — "
@@ -242,6 +248,37 @@ def add_preview(
 
 def added_text(name: str, day: int, month: int, year: Optional[int]) -> str:
     return f"✅ Qo'shildi: <b>{escape(name)}</b> — {format_date(day, month, year)}"
+
+
+def bulk_preview(
+    entries: Sequence[dict], errors: Sequence[tuple[str, str]], existing: set[str]
+) -> str:
+    """
+    Ro'yxatdan qo'shiladiganlar va tushunilmagan qatorlar. entries — name/day/month/year
+    lug'atlari; existing — ro'yxatda allaqachon bor ismlar (casefold).
+    """
+    lines = []
+    if entries:
+        lines.append(f"📋 <b>Qo'shiladi ({len(entries)} ta):</b>")
+        for e in entries:
+            line = f"• {escape(e['name'])} — {format_date(e['day'], e['month'], e['year'])}"
+            if e["name"].casefold() in existing:
+                line += " ⚠️ ro'yxatda allaqachon bor"
+            lines.append(line)
+    if errors:
+        if lines:
+            lines.append("")
+        lines.append(f"❗ <b>Tushunilmadi ({len(errors)} ta):</b>")
+        lines.extend(f"• {escape(line)} — {escape(reason)}" for line, reason in errors)
+    if entries:
+        lines.append("\nSaqlaymizmi?")
+    else:
+        lines.append("\nQatorlarni tuzatib qayta yuboring yoki bitta ismni yozing.")
+    return "\n".join(lines)
+
+
+def bulk_added_text(count: int) -> str:
+    return f"✅ {count} ta tug'ilgan kun qo'shildi!"
 
 
 def deleted_text(name: str) -> str:

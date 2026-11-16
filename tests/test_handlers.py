@@ -49,6 +49,7 @@ from birthday_bot.keyboards import (
     Menu,
     RecordAction,
     RemoveManager,
+    SaveBulk,
     SaveNew,
     SelfAction,
     SetRemind,
@@ -692,3 +693,41 @@ async def test_deep_link_unknown_group(send, db):
     (reply,) = await send(f"/start g_{GONE_G}", chat_type="private")
     assert "topilmadi" in reply
     assert await db.linked_groups(ADMIN) == []
+
+
+async def test_add_flow_bulk_list(send, db):
+    await admin_in_group(db)
+    await db.add_birthday(G, "Alibek", 19, 12, 2022)
+    await send.click(Menu(action="add", group_id=G).pack())
+    accepted, preview = await send(
+        "Adolatxon 27 may 2021\nUsmonbek 29 noyabr 2022\nAlibek 19 dekabr 2022\n"
+        "Salimaxon 1 fevral 2025\nnoto'g'ri qator",
+        chat_type="private",
+    )
+    assert "Qo'shiladi (4 ta)" in preview and "Tushunilmadi (1 ta)" in preview
+    assert "allaqachon bor" in preview
+    (reply,) = await send.click(buttons(send.session.last_markup())["✅ Hammasini saqlash (4)"])
+    assert "4 ta" in reply
+    assert await db.count_birthdays(G) == 5
+    # Qayta bosish ikkinchi marta qo'shmaydi
+    assert await send.click(SaveBulk().pack()) == []
+    assert "eskirgan" in send.session.last_alert().text
+    assert await db.count_birthdays(G) == 5
+    usmon = (await db.find_same_name(G, "Usmonbek"))[0]
+    assert (usmon.day, usmon.month, usmon.year) == (29, 11, 2022)
+
+
+async def test_add_flow_single_line_with_date_skips_date_question(send, db):
+    await admin_in_group(db)
+    await send.click(Menu(action="add", group_id=G).pack())
+    accepted, preview = await send("Karim aka 15 mart 1980", chat_type="private")
+    assert "Qo'shiladi (1 ta)" in preview and "15 Mart 1980" in preview
+
+
+async def test_add_flow_bulk_all_invalid_stays_on_name(send, db):
+    await admin_in_group(db)
+    await send.click(Menu(action="add", group_id=G).pack())
+    (reply,) = await send("bir\nikki", chat_type="private")
+    assert "Tushunilmadi (2 ta)" in reply
+    accepted, question = await send("Karim", chat_type="private")
+    assert "Sanasi?" in question
