@@ -22,16 +22,26 @@ avtomatik yaratiladi.
 ## Qanday ishlatiladi
 
 1. Botni oila guruhiga qo'shing (admin qilish shart emas). Bot salomlashadi va
-   **➕ Tug'ilgan kun qo'shish** tugmasini yuboradi.
-2. Guruh admini tugmani bosadi — botning shaxsiy chati ochiladi. U yerda
-   **➕ Qo'shish**, **📋 Ro'yxat** va **⚙️ Sozlamalar** tugmalari bor: bot ism va
-   sanani so'raydi, buyruq yodlash shart emas.
-3. Tug'ilgan kun kelganda bot guruhda tabriklaydi — hamma xabardor bo'ladi.
+   **🎂 Tug'ilgan kun qo'shish** tugmasini yuboradi.
+2. Tugmani bosing — botning shaxsiy chati ochiladi. Botni qo'shgan odam
+   **boshqaruvchi** bo'ladi: unda **➕ Qo'shish**, **📋 Ro'yxat**, **⚙️ Sozlamalar** va
+   **👥 Boshqaruvchilar** tugmalari bor. Bot ism va sanani so'raydi, odamni
+   **👤 Telegram'dan tanlash** ham mumkin — shunda tabrikda u belgilanadi.
+3. Guruhning boshqa a'zolari ham tugmani bosib, **o'z** tug'ilgan kunini qo'sha oladi.
+4. Tug'ilgan kun kelganda bot guruhda tabriklaydi — hamma xabardor bo'ladi.
 
-Keyinchalik shaxsiy chatda `/menu` yozish kifoya. Bir necha guruh admini bo'lsangiz,
+Kim nima qila oladi:
+
+| Rol | Kim | Nima qiladi |
+|---|---|---|
+| Admin | guruh egasi va adminlari | hammasi + boshqaruvchi tayinlash (`/manager`) |
+| Boshqaruvchi | botni qo'shgan odam yoki admin tayinlagan | hamma tug'ilgan kunlar va sozlamalar |
+| A'zo | guruhning boshqa a'zolari | faqat o'z tug'ilgan kuni |
+
+Keyinchalik shaxsiy chatda `/menu` yozish kifoya. Bir necha guruhda bo'lsangiz,
 bot qaysi guruh bilan ishlashni so'raydi. Tugma ko'rinmay qolsa, guruhda `/menu`
-yozing. Tug'ilgan kunlarni faqat guruh adminlari qo'sha oladi; boshqalar
-`/list` va `/upcoming` dan foydalanadi.
+yozing. Bot guruhga tabrik yubora olmasa (masalan, guruhda yozish cheklangan bo'lsa),
+boshqaruvchilarga shaxsiy chatda kuniga bir marta xabar beradi.
 
 Serverga joylash: [deploy/DEPLOY.md](deploy/DEPLOY.md) (Ubuntu + systemd).
 
@@ -49,23 +59,24 @@ Serverga joylash: [deploy/DEPLOY.md](deploy/DEPLOY.md) (Ubuntu + systemd).
 
 | Buyruq | Kim uchun | Tavsif |
 |---|---|---|
-| `/menu`, `/start` | admin | Shaxsiy chatda — tugmali menyu; guruhda — qo'shish tugmasi |
+| `/menu`, `/start` | hamma | Shaxsiy chatda — rolga qarab tugmali menyu; guruhda — qo'shish tugmasi |
+| reply + `/manager` | admin | Odamni boshqaruvchi qilish (`/manager off` — olib tashlash) |
 | `/help` | hamma | Yordam matni |
 | `/list` | hamma | Saqlangan tug'ilgan kunlar (20 tadan sahifalab, ◀️ ▶️ tugmalari) |
 | `/upcoming` | hamma | Yaqin kunlardagi tug'ilgan kunlar (default 7 kun) |
 | `/find Ism` | hamma | Ism bo'yicha qidirish |
 | `/settings` | hamma | Guruh sozlamalarini ko'rish |
-| `/add Ism 15.03[.1998]` | admin | Tug'ilgan kun qo'shish (yil bilan — yosh hisoblanadi) |
-| reply + `/add 15.03` | admin | Odam xabariga reply qilib qo'shish — tabrikda u belgilanadi (mention) |
-| `/edit ID Ism 15.03.1998` | admin | Ism va sanani o'zgartirish (`/edit ID 15.03` — faqat sana) |
-| `/remove ID` | admin | Yozuvni o'chirish |
-| `/settings time 09:00` | admin | Guruh tabrik vaqti |
-| `/settings remind 3` | admin | Tug'ilgan kunga 3 kun qolganda eslatma (`0` — o'chirish) |
-| `/settings upcoming 14` | admin | `/upcoming` necha kunni ko'rsatadi |
-| reply + `/setsticker` | admin | Stikerga reply qilib — tabrikdan keyin shu stiker yuboriladi (`/setsticker off`) |
+| `/add Ism 15.03[.1998]` | boshqaruvchi | Tug'ilgan kun qo'shish (yil bilan — yosh hisoblanadi) |
+| reply + `/add 15.03` | boshqaruvchi | Odam xabariga reply qilib qo'shish — tabrikda u belgilanadi (mention) |
+| `/edit ID Ism 15.03.1998` | boshqaruvchi | Ism va sanani o'zgartirish (`/edit ID 15.03` — faqat sana) |
+| `/remove ID` | boshqaruvchi | Yozuvni o'chirish |
+| `/settings time 09:00` | boshqaruvchi | Guruh tabrik vaqti |
+| `/settings remind 3` | boshqaruvchi | Tug'ilgan kunga 3 kun qolganda eslatma (`0` — o'chirish) |
+| `/settings upcoming 14` | boshqaruvchi | `/upcoming` necha kunni ko'rsatadi |
+| reply + `/setsticker` | boshqaruvchi | Stikerga reply qilib — tabrikdan keyin shu stiker yuboriladi (`/setsticker off`) |
 
-`ID` ni `/list` dan oling. Shaxsiy chatda admin buyruqlari faqat
-`DEFAULT_GROUP_ID` guruhining adminlari uchun ishlaydi.
+`ID` ni `/list` dan oling. Shaxsiy chatda bu buyruqlar faqat
+`DEFAULT_GROUP_ID` guruhining boshqaruvchilari uchun ishlaydi.
 
 29-fevralda tug'ilganlar kabisa bo'lmagan yillarda 28-fevralda tabriklanadi.
 Tabrik va eslatma har bir odam uchun kuniga bir marta yuboriladi; bot
@@ -87,7 +98,7 @@ birthdate-bot/
 │   ├── permissions.py   # Guruhni aniqlash va admin tekshiruvi
 │   ├── scheduler.py     # Har daqiqalik tekshiruv: tabrik va eslatma
 │   └── handlers/        # buyruqlar (common, birthdays, settings) va menyu
-│                        # (group_events, menu, add_flow, manage, settings_menu)
+│                        # (group_events, menu, add_flow, manage, settings_menu, self_flow)
 ├── tests/               # pytest testlari
 └── deploy/              # systemd xizmati va deploy qo'llanmasi
 ```
