@@ -400,3 +400,45 @@ async def test_forged_callback_rejected(send, db):
     assert await send.click(Menu(action="home", group_id=G).pack(), from_id=MEMBER) == []
     alert = send.session.last_alert()
     assert alert.show_alert and "⛔" in alert.text
+
+
+async def test_add_flow(send, db):
+    await admin_in_group(db)
+    (reply,) = await send.click(Menu(action="add", group_id=G).pack())
+    assert "Ismini yozing" in reply
+    (reply,) = await send("  Karim   aka ", chat_type="private")
+    assert "Sanasi?" in reply
+    (reply,) = await send("31.02", chat_type="private")
+    assert "mavjud emas" in reply and "Sanasi?" in reply
+    (reply,) = await send("15.03.1980", chat_type="private")
+    assert "Karim aka</b> — 15 Mart 1980" in reply
+    (reply,) = await send.click(buttons(send.session.last_markup())["✅ Saqlash"])
+    assert "Qo'shildi" in reply
+    assert "➕ Yana qo'shish" in buttons(send.session.last_markup())
+    (b,) = await db.list_birthdays(G)
+    assert (b.name, b.day, b.month, b.year) == ("Karim aka", 15, 3, 1980)
+
+    # Saqlangandan keyin tugma qayta bosilsa — ikkinchi yozuv qo'shilmaydi
+    assert await send.click(SaveNew().pack()) == []
+    assert "eskirgan" in send.session.last_alert().text
+    assert await db.count_birthdays(G) == 1
+
+
+async def test_add_flow_cancel_and_command_interrupt(send, db):
+    await admin_in_group(db)
+    await send.click(Menu(action="add", group_id=G).pack())
+    (reply,) = await send.click(Cancel(group_id=G).pack())
+    assert "Nima qilamiz?" in reply
+    assert await send("Karim", chat_type="private") == []  # holat yo'q — e'tiborsiz
+
+    await send.click(Menu(action="add", group_id=G).pack())
+    (reply,) = await send("/help", chat_type="private")
+    assert "/add" in reply
+    assert await send("Karim", chat_type="private") == []
+    assert await db.count_birthdays(G) == 0
+
+
+async def test_add_flow_rejects_non_admin(send, db):
+    await db.upsert_group(G, "Oila")
+    assert await send.click(Menu(action="add", group_id=G).pack(), from_id=MEMBER) == []
+    assert await send("Karim", from_id=MEMBER, chat_type="private") == []
