@@ -2,7 +2,19 @@ import random
 from datetime import date, time
 
 from birthday_bot.models import Birthday, GroupSettings, Upcoming
-from birthday_bot.texts import greeting, mention, reminder, settings_text, split_messages
+from birthday_bot.texts import (
+    add_preview,
+    added_text,
+    greeting,
+    mention,
+    menu_text,
+    record_button_text,
+    record_card,
+    reminder,
+    settings_menu_text,
+    settings_text,
+    split_messages,
+)
 
 
 def make(**kw) -> Birthday:
@@ -46,3 +58,28 @@ def test_split_messages():
     assert all(len(c) <= 35 for c in chunks)
     assert "\n".join(chunks).count("a") == 100
     assert split_messages([]) == []
+
+
+def test_menu_and_add_texts_escape():
+    assert "&lt;b&gt;" in menu_text("<b>")
+    assert menu_text("").startswith("🏠 <b>Guruh</b>")
+    assert add_preview("A<", 15, 3, 1980) == (
+        "Tekshiring:\n<b>A&lt;</b> — 15 Mart 1980\n\nSaqlaymizmi?"
+    )
+    assert added_text("Ali", 15, 3, None) == "✅ Qo'shildi: <b>Ali</b> — 15 Mart"
+
+
+def test_record_card():
+    today = date(2026, 3, 10)
+    card = record_card(make(name="Ali", day=15, month=3, year=1980), today)
+    assert "15 Mart 1980" in card and "5 kundan keyin" in card and "46 yoshga" in card
+    assert "bugun" in record_card(make(day=10, month=3), today)
+    assert "Ali &lt;3" in record_card(make(day=10, month=3), today)
+    # Tugma matni HTML emas — escape qilinmaydi
+    assert record_button_text(make(day=1, month=5)) == "Ali <3 — 1 May"
+
+
+def test_settings_menu_text():
+    text = settings_menu_text(GroupSettings(notify_time=time(9, 0), remind_days=3))
+    assert "09:00" in text and "3 kun oldin" in text
+    assert "o'chirilgan" in settings_menu_text(GroupSettings(notify_time=time(9, 0)))

@@ -10,7 +10,7 @@ from datetime import date
 from html import escape
 from typing import Optional
 
-from birthday_bot.dates import calc_age, format_time
+from birthday_bot.dates import calc_age, format_time, next_birthday
 from birthday_bot.models import MAX_REMIND_DAYS, MAX_UPCOMING_DAYS, Birthday, GroupSettings, Upcoming
 
 # Telegram xabar chegarasi 4096 belgi — biroz zaxira qoldiramiz
@@ -35,6 +35,7 @@ HELP_TEXT = (
     "• <code>/find Ism</code> — ism bo'yicha qidirish\n"
     "• <code>/settings</code> — guruh sozlamalari\n\n"
     "<b>Adminlar uchun:</b>\n"
+    "• <code>/menu</code> — tugmali menyu: qo'shish, ro'yxat, sozlamalar (eng oson yo'l)\n"
     "• <code>/add Ism 15.03</code> yoki <code>/add Ism 15.03.1998</code>\n"
     "• odam xabariga reply qilib <code>/add 15.03</code> — tabrikda u belgilanadi\n"
     "• <code>/edit ID Ism 15.03.1998</code> yoki <code>/edit ID 15.03</code>\n"
@@ -57,6 +58,38 @@ SETTINGS_USAGE = (
     f"(1–{MAX_UPCOMING_DAYS})\n"
     "• stikerga reply qilib <code>/setsticker</code>"
 )
+
+WELCOME_TEXT = (
+    "👋 Salom! Men shu guruhdagilarning tug'ilgan kunini eslab, "
+    "o'z vaqtida tabriklayman 🎉\n\n"
+    "Guruh adminlari pastdagi tugma orqali tug'ilgan kunlarni qo'shadi.\n"
+    "Hamma uchun: /upcoming — yaqin tug'ilgan kunlar, /list — ro'yxat."
+)
+NOT_ADMIN_TEXT = (
+    "⛔ Qo'shish faqat guruh adminlariga ruxsat etilgan. "
+    "Tug'ilgan kuningizni qo'shishni admindan so'rang 🙂"
+)
+# Callback alert — oddiy matn (HTML emas), 200 belgigacha
+NOT_ADMIN_ALERT = "⛔ Bu amal faqat guruh adminlariga ruxsat etilgan."
+STALE_TEXT = "Bu menyu eskirgan. /menu ni bosing."
+NO_GROUPS_TEXT = (
+    "Hali birorta guruhingiz ulanmagan.\n\n"
+    "1. Meni oila guruhingizga qo'shing.\n"
+    "2. Guruhda <b>➕ Tug'ilgan kun qo'shish</b> tugmasini bosing "
+    "(tugma ko'rinmasa, guruhda /menu yozing).\n\n"
+    "Buni faqat guruh admini qila oladi."
+)
+CHOOSE_GROUP_TEXT = "Qaysi guruh bilan ishlaymiz?"
+ASK_NAME_TEXT = "Kimning tug'ilgan kuni? Ismini yozing.\nMasalan: <i>Karim aka</i>"
+ASK_DATE_TEXT = (
+    "Sanasi? Masalan: <code>15.03</code> yoki <code>15.03.1980</code> (yili ixtiyoriy)"
+)
+ASK_NEW_NAME_TEXT = "Yangi ismni yozing:"
+ASK_NEW_DATE_TEXT = "Yangi sanani yozing: <code>15.03</code> yoki <code>15.03.1980</code>"
+ASK_TIME_TEXT = "Tabrik vaqtini yozing, masalan <code>09:30</code>"
+EMPTY_LIST_TEXT = "Hali hech kim qo'shilmagan."
+RECORD_GONE_TEXT = "Bu yozuv endi yo'q."
+SAVED_TEXT = "✏️ Saqlandi."
 
 
 def mention(name: str, user_id: Optional[int] = None) -> str:
@@ -110,6 +143,60 @@ def settings_text(s: GroupSettings) -> str:
         f"🔔 /upcoming: <b>{s.upcoming_days} kun</b>\n"
         f"🎨 Stiker: <b>{sticker}</b>\n\n"
         + SETTINGS_USAGE
+    )
+
+
+def menu_text(title: str) -> str:
+    return f"🏠 <b>{escape(title) or 'Guruh'}</b>\n\nNima qilamiz?"
+
+
+def add_preview(name: str, day: int, month: int, year: Optional[int]) -> str:
+    return (
+        f"Tekshiring:\n<b>{escape(name)}</b> — {format_date(day, month, year)}\n\nSaqlaymizmi?"
+    )
+
+
+def added_text(name: str, day: int, month: int, year: Optional[int]) -> str:
+    return f"✅ Qo'shildi: <b>{escape(name)}</b> — {format_date(day, month, year)}"
+
+
+def deleted_text(name: str) -> str:
+    return f"🗑 O'chirildi: <b>{escape(name)}</b>"
+
+
+def records_title(total: int) -> str:
+    return f"📋 <b>Tug'ilgan kunlar</b> ({total} ta)\nKimnidir tanlang:"
+
+
+def record_button_text(b: Birthday) -> str:
+    # Tugma matni HTML sifatida o'qilmaydi — escape kerak emas
+    return f"{b.name} — {format_date(b.day, b.month)}"
+
+
+def record_card(b: Birthday, today: date) -> str:
+    nxt = next_birthday(b.day, b.month, today)
+    when = "bugun" if nxt == today else f"{(nxt - today).days} kundan keyin"
+    text = (
+        f"👤 <b>{mention(b.name, b.user_id)}</b>\n"
+        f"📅 {format_date(b.day, b.month, b.year)}\n"
+        f"⏳ Keyingi tug'ilgan kun: {when}"
+    )
+    if b.year:
+        text += f", {calc_age(b.year, nxt)} yoshga to'ladi"
+    return text
+
+
+def confirm_delete_text(b: Birthday) -> str:
+    return f"🗑 <b>{escape(b.name)}</b> rostdan o'chirilsinmi?"
+
+
+def settings_menu_text(s: GroupSettings) -> str:
+    remind = f"{s.remind_days} kun oldin" if s.remind_days else "o'chirilgan"
+    return (
+        "⚙️ <b>Sozlamalar</b>\n\n"
+        f"🕗 Tabrik vaqti: <b>{format_time(s.notify_time)}</b>\n"
+        f"⏰ Oldindan eslatma: <b>{remind}</b>\n\n"
+        "Yuqorida — tabrik vaqti, pastda — necha kun oldin eslatish."
     )
 
 
