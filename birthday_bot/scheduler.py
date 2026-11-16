@@ -93,11 +93,13 @@ async def _manager_recipients(bot: Bot, db: Database, group_id: int) -> list[int
 async def _send_digests(bot: Bot, db: Database, on_date: date, at: time):
     """Tabrikdan 1 soat oldin boshqaruvchilarga: bugun va ertaga kimning tug'ilgan kuni."""
     for group in await db.get_digest_due(on_date, at):
+        settings = await db.get_settings(group.group_id)
         items = await db.get_upcoming(group.group_id, on_date, 1)
-        if not items:
+        # Tabrik vaqti o'tib ketgan bo'lsa (bot kech yoqilgan) — kechikkan xabar
+        # "tabrik 08:00 da ketadi" deb chalg'itadi, shu kunga o'tkazib yuboramiz
+        if not items or at >= settings.notify_time:
             await db.mark_digest_sent(group.group_id, on_date)
             continue
-        settings = await db.get_settings(group.group_id)
         text = digest_text(group.title or str(group.group_id), items, settings.notify_time)
         try:
             for user_id in await _manager_recipients(bot, db, group.group_id):

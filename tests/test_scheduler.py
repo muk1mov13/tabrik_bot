@@ -145,3 +145,14 @@ async def test_no_digest_on_quiet_day(db):
     bot = FakeBot()
     await check_and_notify(bot, db, datetime(2026, 5, 1, 7, 0, tzinfo=TZ))
     assert bot.messages == []
+
+
+async def test_no_late_digest_after_greeting_time(db):
+    # Bot tabrik vaqtidan keyin yoqilsa — "tabrik 08:00 da ketadi" degan kechikkan xabar yo'q
+    await db.upsert_group(G, "Oila")
+    await db.add_birthday(G, "Ali", 1, 5)
+    await db.add_manager(G, 5)
+    bot = FakeBot()
+    await check_and_notify(bot, db, datetime(2026, 5, 1, 17, 0, tzinfo=TZ))
+    assert [chat for chat, _ in bot.messages] == [G]  # faqat tabrikning o'zi
+    assert await db.get_digest_due(date(2026, 5, 1), time(17, 1)) == []
