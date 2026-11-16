@@ -8,7 +8,7 @@ from aiogram import Bot, F, Router
 from aiogram.enums import ChatType
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
+from aiogram.types import BufferedInputFile, CallbackQuery, InlineKeyboardMarkup, Message
 
 from birthday_bot.config import Config
 from birthday_bot.database import Database
@@ -16,6 +16,7 @@ from birthday_bot.dates import now
 from birthday_bot.handlers.ui import TEXT_INPUT, ensure_manager, show
 from birthday_bot.keyboards import (
     RECORDS_PAGE_SIZE,
+    ListTool,
     Menu,
     RecordAction,
     RecordPage,
@@ -24,28 +25,41 @@ from birthday_bot.keyboards import (
     empty_list_keyboard,
     record_keyboard,
     records_keyboard,
+    search_results_keyboard,
 )
 from birthday_bot.models import Birthday
 from birthday_bot.parsing import ParseError, parse_date, parse_name
 from birthday_bot.texts import (
     ASK_NEW_DATE_TEXT,
     ASK_NEW_NAME_TEXT,
+    ASK_SEARCH_TEXT,
     EMPTY_LIST_TEXT,
+    EXPORT_CAPTION,
     RECORD_GONE_TEXT,
     SAVED_TEXT,
     confirm_delete_text,
     deleted_text,
+    export_text,
     record_card,
     records_title,
+    search_results_text,
 )
 
 router = Router(name="manage")
 router.message.filter(F.chat.type == ChatType.PRIVATE)
 
 
+SEARCH_LIMIT = 20
+EXPORT_FILENAME = "tugilgan_kunlar.txt"
+
+
 class EditBirthday(StatesGroup):
     name = State()
     date = State()
+
+
+class ManageSearch(StatesGroup):
+    query = State()
 
 
 async def records_view(db: Database, group_id: int, page: int) -> tuple[str, InlineKeyboardMarkup]:
@@ -68,6 +82,46 @@ async def cb_records(
     page = getattr(callback_data, "page", 0)
     text, keyboard = await records_view(db, callback_data.group_id, page)
     await show(callback, text, keyboard)
+
+
+@router.callback_query(ListTool.filter(F.action == "search"))
+async def cb_search(
+    callback: CallbackQuery, callback_data: ListTool, bot: Bot, db: Database, state: FSMContext
+):
+    group_id = callback_data.group_id
+    if not await ensure_manager(callback, bot, db, group_id):
+        return
+    await state.set_state(ManageSearch.query)
+    await state.set_data({"group_id": group_id})
+    await show(callback, ASK_SEARCH_TEXT, cancel_keyboard(group_id))
+
+
+@router.message(ManageSearch.query, TEXT_INPUT)
+async def got_search(message: Message, bot: Bot, db: Database, state: FSMContext):
+    group_id = (await state.get_data())["group_id"]
+    await state.clear()
+    if not await ensure_manager(message, bot, db, group_id):
+        return
+    query = " ".join(message.text.split())
+    found = await db.find_birthdays(group_id, query, limit=SEARCH_LIMIT)
+    await message.answer(
+        search_results_text(query, len(found)),
+        reply_markup=search_results_keyboard(group_id, found),
+    )
+
+
+@router.callback_query(ListTool.filter(F.action == "export"))
+async def cb_export(callback: CallbackQuery, callback_data: ListTool, bot: Bot, db: Database):
+    group_id = callback_data.group_id
+    if not await ensure_manager(callback, bot, db, group_id):
+        return
+    birthdays = await db.list_birthdays(group_id)
+    if not birthdays:
+        await callback.answer(EMPTY_LIST_TEXT, show_alert=True)
+        return
+    document = BufferedInputFile(export_text(birthdays).encode("utf-8"), filename=EXPORT_FILENAME)
+    await bot.send_document(callback.from_user.id, document, caption=EXPORT_CAPTION)
+    await callback.answer()
 
 
 @router.callback_query(RecordAction.filter())

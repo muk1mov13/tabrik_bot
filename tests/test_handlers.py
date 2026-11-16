@@ -20,6 +20,7 @@ from aiogram.methods import (
     GetChat,
     GetChatMember,
     GetMe,
+    SendDocument,
     SendMessage,
     TelegramMethod,
 )
@@ -46,6 +47,7 @@ from birthday_bot.config import Config
 from birthday_bot.handlers import build_router
 from birthday_bot.keyboards import (
     Cancel,
+    ListTool,
     Menu,
     RecordAction,
     RemoveManager,
@@ -740,3 +742,34 @@ async def test_manager_menu_shows_upcoming(send, db, config):
     await db.add_birthday(G, "Karim aka", soon.day, soon.month)
     (reply,) = await send("/menu", chat_type="private")
     assert "Yaqin kunlarda" in reply and "Karim aka" in reply
+
+
+async def test_manage_search(send, db):
+    await admin_in_group(db)
+    await db.add_birthday(G, "Karim aka", 15, 3)
+    await db.add_birthday(G, "Alibek", 19, 12)
+    await send.click(Menu(action="list", group_id=G).pack())
+    (reply,) = await send.click(buttons(send.session.last_markup())["🔎 Qidirish"])
+    assert "Kimni qidiramiz" in reply
+    (reply,) = await send("kar", chat_type="private")
+    assert "1 ta" in reply
+    kb = buttons(send.session.last_markup())
+    assert "Karim aka — 15 Mart" in kb and "Alibek — 19 Dekabr" not in kb
+    (reply,) = await send.click(kb["Karim aka — 15 Mart"])
+    assert "15 Mart" in reply
+
+    await send.click(ListTool(action="search", group_id=G).pack())
+    (reply,) = await send("yo'q", chat_type="private")
+    assert "topilmadi" in reply and "🔎 Yana qidirish" in buttons(send.session.last_markup())
+
+
+async def test_manage_export(send, db):
+    await admin_in_group(db)
+    await db.add_birthday(G, "Adolatxon", 27, 5, 2021)
+    await send.click(ListTool(action="export", group_id=G).pack())
+    (doc,) = [r for r in send.session.requests if isinstance(r, SendDocument)]
+    assert doc.chat_id == ADMIN
+    assert doc.document.data.decode("utf-8") == "Adolatxon 27 may 2021\n"
+    # Boshqaruvchi bo'lmagan yuklab ololmaydi
+    await send.click(ListTool(action="export", group_id=G).pack(), from_id=MEMBER)
+    assert not any(isinstance(r, SendDocument) for r in send.session.requests)

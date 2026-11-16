@@ -115,6 +115,11 @@ ASK_NEW_NAME_TEXT ="Yangi ismni yozing:"
 ASK_NEW_DATE_TEXT = "Yangi sanani yozing: <code>15.03</code> yoki <code>15.03.1980</code>"
 ASK_TIME_TEXT = "Tabrik vaqtini yozing, masalan <code>09:30</code>"
 EMPTY_LIST_TEXT = "Hali hech kim qo'shilmagan."
+ASK_SEARCH_TEXT = "🔎 Kimni qidiramiz? Ismning bir qismini yozing:"
+EXPORT_CAPTION = (
+    "📤 Barcha tug'ilgan kunlar. Shu faylning matnini ➕ Qo'shish orqali qayta "
+    "yuborsangiz — ro'yxat tiklanadi."
+)
 RECORD_GONE_TEXT = "Bu yozuv endi yo'q."
 SAVED_TEXT = "✏️ Saqlandi."
 
@@ -290,6 +295,21 @@ def deleted_text(name: str) -> str:
 
 def records_title(total: int) -> str:
     return f"📋 <b>Tug'ilgan kunlar</b> ({total} ta)\nKimnidir tanlang:"
+
+
+def search_results_text(query: str, count: int) -> str:
+    if not count:
+        return f"🔎 «{escape(query)}» bo'yicha hech kim topilmadi."
+    return f"🔎 «{escape(query)}» bo'yicha {count} ta topildi:"
+
+
+def export_text(birthdays: Sequence[Birthday]) -> str:
+    """Har qatorda "Ism 27 may 2021" — parsing.parse_bulk qayta o'qiy oladi."""
+    lines = []
+    for b in birthdays:
+        line = f"{b.name} {b.day} {MONTH_NAMES[b.month].lower()}"
+        lines.append(f"{line} {b.year}" if b.year else line)
+    return "".join(f"{line}\n" for line in lines)
 
 
 def record_button_text(b: Birthday) -> str:

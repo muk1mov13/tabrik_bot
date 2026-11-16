@@ -38,7 +38,8 @@ def test_main_menu_keyboard():
 def test_records_keyboard_navigation():
     items = [Birthday(id=i, group_id=G, name=f"Odam {i}", day=1, month=1) for i in range(3)]
     assert texts(records_keyboard(G, items, 0, 2)) == [
-        "Odam 0 — 1 Yanvar", "Odam 1 — 1 Yanvar", "Odam 2 — 1 Yanvar", "➡️", "🏠 Menyu",
+        "Odam 0 — 1 Yanvar", "Odam 1 — 1 Yanvar", "Odam 2 — 1 Yanvar", "➡️",
+        "🔎 Qidirish", "📤 Yuklab olish", "🏠 Menyu",
     ]
     last = texts(records_keyboard(G, items, 1, 2))
     assert "⬅️" in last and "➡️" not in last

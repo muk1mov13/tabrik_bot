@@ -2,10 +2,12 @@ import random
 from datetime import date, time
 
 from birthday_bot.models import Birthday, GroupSettings, Upcoming
+from birthday_bot.parsing import parse_bulk
 from birthday_bot.texts import (
     GREETINGS,
     add_preview,
     added_text,
+    export_text,
     greeting,
     mention,
     menu_text,
@@ -111,3 +113,13 @@ def test_menu_text_shows_upcoming():
     text = menu_text("Oila", [soon])
     assert "Yaqin kunlarda" in text and "Karim aka" in text and "3 kundan keyin" in text
     assert "Yaqin kunlarda" not in menu_text("Oila")
+
+
+def test_export_text_round_trips_through_bulk_parser():
+    items = [make(name="Adolatxon", day=27, month=5, year=2021), make(name="Ali aka", day=1, month=12)]
+    text = export_text(items)
+    assert text == "Adolatxon 27 may 2021\nAli aka 1 dekabr\n"
+    parsed = parse_bulk(text, date(2026, 11, 16))
+    assert [(e.name, e.day, e.month, e.year) for e in parsed.entries] == [
+        ("Adolatxon", 27, 5, 2021), ("Ali aka", 1, 12, None),
+    ]

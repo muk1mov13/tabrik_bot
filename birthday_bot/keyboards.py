@@ -53,6 +53,11 @@ class RecordPage(CallbackData, prefix="rp"):
     page: int
 
 
+class ListTool(CallbackData, prefix="lt"):
+    action: str  # search | export
+    group_id: int
+
+
 class RecordAction(CallbackData, prefix="r"):
     action: str  # show | name | date | del | delyes
     group_id: int
@@ -197,16 +202,28 @@ def empty_list_keyboard(group_id: int) -> InlineKeyboardMarkup:
 def records_keyboard(
     group_id: int, birthdays: list[Birthday], page: int, pages: int
 ) -> InlineKeyboardMarkup:
-    rows = [
-        [_cb(record_button_text(b), RecordAction(action="show", group_id=group_id, record_id=b.id, page=page))]
-        for b in birthdays
-    ]
     nav = []
     if page > 0:
         nav.append(_cb("⬅️", RecordPage(group_id=group_id, page=page - 1)))
     if page < pages - 1:
         nav.append(_cb("➡️", RecordPage(group_id=group_id, page=page + 1)))
-    return _kb(*rows, nav, [home_button(group_id)])
+    tools = [
+        _cb("🔎 Qidirish", ListTool(action="search", group_id=group_id)),
+        _cb("📤 Yuklab olish", ListTool(action="export", group_id=group_id)),
+    ]
+    return _kb(*_record_rows(group_id, birthdays, page), nav, tools, [home_button(group_id)])
+
+
+def _record_rows(group_id: int, birthdays: list[Birthday], page: int) -> list[list[InlineKeyboardButton]]:
+    return [
+        [_cb(record_button_text(b), RecordAction(action="show", group_id=group_id, record_id=b.id, page=page))]
+        for b in birthdays
+    ]
+
+
+def search_results_keyboard(group_id: int, birthdays: list[Birthday]) -> InlineKeyboardMarkup:
+    again = _cb("🔎 Yana qidirish", ListTool(action="search", group_id=group_id))
+    return _kb(*_record_rows(group_id, birthdays, 0), [again, home_button(group_id)])
 
 
 def record_keyboard(group_id: int, record_id: int, page: int) -> InlineKeyboardMarkup:
