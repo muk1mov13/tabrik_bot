@@ -78,7 +78,7 @@ class SetRemind(CallbackData, prefix="sr"):
 
 
 class SettingsAction(CallbackData, prefix="sa"):
-    action: str  # greeting | preview | reset_greeting | sticker | del_sticker
+    action: str  # greeting | preview | reset_greeting | sticker | del_sticker | digest
     group_id: int
 
 
@@ -265,7 +265,9 @@ def confirm_delete_keyboard(group_id: int, record_id: int, page: int) -> InlineK
     return _kb([_cb("Ha, o'chirish", act("delyes")), _cb("Yo'q", act("show"))])
 
 
-def settings_keyboard(group_id: int, s: GroupSettings) -> InlineKeyboardMarkup:
+def settings_keyboard(
+    group_id: int, s: GroupSettings, digest_enabled: bool = True
+) -> InlineKeyboardMarkup:
     times = [
         _cb(_mark(format_time(t), t == s.notify_time),
             SetTime(group_id=group_id, minutes=t.hour * 60 + t.minute))
@@ -287,11 +289,14 @@ def settings_keyboard(group_id: int, s: GroupSettings) -> InlineKeyboardMarkup:
         extras.append(_cb("↩️ Standart matn", act("reset_greeting")))
     if s.sticker_file_id:
         extras.append(_cb("🗑 Stikerni o'chirish", act("del_sticker")))
+    # Shaxsiy sozlama: faqat shu boshqaruvchining ertalabki xabari
+    digest_label = "🔔 Ertalabki xabar: yoqilgan" if digest_enabled else "🔕 Ertalabki xabar: o'chirilgan"
     return _kb(
         times[:3],
         [*times[3:], _cb(_mark(custom_label, custom), SetTime(group_id=group_id, minutes=CUSTOM_TIME))],
         remind,
         look,
         extras,
+        [_cb(digest_label, act("digest"))],
         [home_button(group_id)],
     )

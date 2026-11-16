@@ -9,7 +9,7 @@ tushsa, o'tkazib yuborilgan xabarlar darhol yuboriladi.
 """
 
 import logging
-from datetime import date, datetime
+from datetime import date, datetime, time
 from typing import Optional
 
 from aiogram import Bot
@@ -21,7 +21,7 @@ from birthday_bot.config import Config
 from birthday_bot.database import Database
 from birthday_bot.dates import now
 from birthday_bot.permissions import Role, get_role
-from birthday_bot.texts import greeting, reminder, send_failed_text
+from birthday_bot.texts import digest_text, greeting, reminder, send_failed_text
 
 logger = logging.getLogger(__name__)
 
@@ -72,12 +72,7 @@ async def _report_failure(
 
     group = await db.get_group(group_id)
     text = send_failed_text(group.title if group and group.title else str(group_id), error.message)
-    # Boshqaruvchilar rol tekshirilmasdan: bot chiqarilgan bo'lsa rolni ham bilib bo'lmaydi
-    recipients = set(await db.list_managers(group_id))
-    for user_id in await db.linked_users(group_id):
-        if user_id not in recipients and await get_role(bot, db, group_id, user_id) == Role.ADMIN:
-            recipients.add(user_id)
-    for user_id in sorted(recipients):
+    for user_id in await _manager_recipients(bot, db, group_id):
         try:
             await bot.send_message(chat_id=user_id, text=text)
         except TelegramAPIError as exc:
@@ -85,10 +80,48 @@ async def _report_failure(
             logger.warning("Xato haqida xabar yuborilmadi (user=%s): %s", user_id, exc)
 
 
+async def _manager_recipients(bot: Bot, db: Database, group_id: int) -> list[int]:
+    """Boshqaruvchilar va botga bog'langan adminlar."""
+    # Boshqaruvchilar rol tekshirilmasdan: bot chiqarilgan bo'lsa rolni ham bilib bo'lmaydi
+    recipients = set(await db.list_managers(group_id))
+    for user_id in await db.linked_users(group_id):
+        if user_id not in recipients and await get_role(bot, db, group_id, user_id) == Role.ADMIN:
+            recipients.add(user_id)
+    return sorted(recipients)
+
+
+async def _send_digests(bot: Bot, db: Database, on_date: date, at: time):
+    """Tabrikdan 1 soat oldin boshqaruvchilarga: bugun va ertaga kimning tug'ilgan kuni."""
+    for group in await db.get_digest_due(on_date, at):
+        items = await db.get_upcoming(group.group_id, on_date, 1)
+        if not items:
+            await db.mark_digest_sent(group.group_id, on_date)
+            continue
+        settings = await db.get_settings(group.group_id)
+        text = digest_text(group.title or str(group.group_id), items, settings.notify_time)
+        try:
+            for user_id in await _manager_recipients(bot, db, group.group_id):
+                if not await db.get_digest_enabled(user_id, group.group_id):
+                    continue
+                try:
+                    await bot.send_message(chat_id=user_id, text=text)
+                except TelegramNetworkError:
+                    raise
+                except TelegramAPIError as exc:
+                    logger.warning("Ertalabki xabar yuborilmadi (user=%s): %s", user_id, exc)
+        except TelegramNetworkError as exc:
+            # Internet yo'q — keyingi daqiqada qayta uriniladi (belgi qo'yilmaydi)
+            logger.warning("Ertalabki xabar keyinga qoldi (guruh=%s): %s", group.group_id, exc)
+            continue
+        await db.mark_digest_sent(group.group_id, on_date)
+
+
 async def check_and_notify(
     bot: Bot, db: Database, current: datetime, failures: Optional[set] = None
 ):
     on_date, at = current.date(), current.time().replace(second=0, microsecond=0)
+
+    await _send_digests(bot, db, on_date, at)
 
     for birthday, sticker in await db.get_pending_greetings(on_date, at):
         template = (await db.get_settings(birthday.group_id)).greeting_template

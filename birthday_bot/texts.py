@@ -6,7 +6,7 @@ mention() yoki escape() orqali o'tishi shart.
 """
 
 import random
-from datetime import date
+from datetime import date, time
 from html import escape
 from typing import Optional, Sequence
 
@@ -267,6 +267,25 @@ def managers_text(managers: list[tuple[int, str]], is_admin: bool) -> str:
     lines.append("\nGuruh adminlari ham tug'ilgan kunlarni boshqaradi.")
     if is_admin:
         lines.append(MANAGER_USAGE)
+    return "\n".join(lines)
+
+
+def digest_text(group_title: str, items: Sequence[Upcoming], notify_time: time) -> str:
+    """Boshqaruvchiga ertalabki xabar: bugungi va ertangi tug'ilgan kunlar."""
+    def person(item: Upcoming) -> str:
+        b = item.birthday
+        age = f" ({calc_age(b.year, item.date)} yosh)" if b.year else ""
+        return f"• {mention(b.name, b.user_id)}{age}"
+
+    today = [i for i in items if i.days_left == 0]
+    tomorrow = [i for i in items if i.days_left == 1]
+    lines = [f"☀️ <b>«{escape(group_title)}»</b>"]
+    if today:
+        lines.append(f"\n🎂 <b>Bugun</b> — tabrik {format_time(notify_time)} da guruhga yuboriladi:")
+        lines.extend(person(i) for i in today)
+    if tomorrow:
+        lines.append("\n⏰ <b>Ertaga:</b>")
+        lines.extend(person(i) for i in tomorrow)
     return "\n".join(lines)
 
 

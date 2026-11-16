@@ -1,4 +1,4 @@
-from datetime import datetime, time
+from datetime import date, datetime, time
 from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 
@@ -77,6 +77,8 @@ async def test_failed_send_notifies_managers_once_a_day(db):
     await db.add_manager(G, 5)
     await db.link_user(1, G)  # admin — xabar oladi
     await db.link_user(7, G)  # oddiy a'zo — xabar olmaydi
+    # Bu test xato haqidagi xabarni tekshiradi — ertalabki xabar aralashmasin
+    await db.mark_digest_sent(G, date(2026, 5, 1))
     bot = FakeBot(fail_chats={G}, admins={1})
     failures = set()
     for minute in range(3):
@@ -86,6 +88,7 @@ async def test_failed_send_notifies_managers_once_a_day(db):
 
     # Ertasi kuni yana muammo bo'lsa — yana bir marta xabar beriladi
     await db.add_birthday(G, "Vali", 2, 5)
+    await db.mark_digest_sent(G, date(2026, 5, 2))
     await check_and_notify(bot, db, datetime(2026, 5, 2, 8, 0, tzinfo=TZ), failures)
     assert len(bot.messages) == 4
 
@@ -95,6 +98,7 @@ async def test_network_error_is_retried_without_alarming_managers(db):
     await db.upsert_group(G, "Oila")
     await db.add_birthday(G, "Ali", 1, 5)
     await db.add_manager(G, 5)
+    await db.mark_digest_sent(G, date(2026, 5, 1))
     failures = set()
     offline = FakeBot(fail_chats={G}, error=TelegramNetworkError)
     await check_and_notify(offline, db, datetime(2026, 5, 1, 8, 0, tzinfo=TZ), failures)
@@ -111,3 +115,33 @@ async def test_custom_greeting_template_is_used(db):
     bot = FakeBot()
     await check_and_notify(bot, db, datetime(2026, 5, 1, 8, 0, tzinfo=TZ))
     assert bot.messages == [(G, "Muborak bo'lsin, <b>Ali</b>!")]
+
+
+async def test_morning_digest_an_hour_before_greeting(db):
+    await db.upsert_group(G, "Oila")
+    await db.add_birthday(G, "Ali", 1, 5, 1970)  # bugun
+    await db.add_birthday(G, "Vali", 2, 5)       # ertaga
+    await db.add_manager(G, 5)
+    await db.add_manager(G, 6)
+    await db.set_digest_enabled(6, G, False)     # o'chirib qo'ygan
+    bot = FakeBot()
+
+    await check_and_notify(bot, db, datetime(2026, 5, 1, 6, 59, tzinfo=TZ))
+    assert bot.messages == []
+    await check_and_notify(bot, db, datetime(2026, 5, 1, 7, 0, tzinfo=TZ))
+    assert [chat for chat, _ in bot.messages] == [5]
+    text = bot.messages[0][1]
+    assert "Oila" in text and "Ali" in text and "56 yosh" in text and "08:00" in text
+    assert "Ertaga" in text and "Vali" in text
+
+    await check_and_notify(bot, db, datetime(2026, 5, 1, 7, 1, tzinfo=TZ))
+    assert len(bot.messages) == 1  # kuniga bir marta
+
+
+async def test_no_digest_on_quiet_day(db):
+    await db.upsert_group(G, "Oila")
+    await db.add_birthday(G, "Ali", 20, 5)
+    await db.add_manager(G, 5)
+    bot = FakeBot()
+    await check_and_notify(bot, db, datetime(2026, 5, 1, 7, 0, tzinfo=TZ))
+    assert bot.messages == []

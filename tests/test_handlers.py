@@ -863,3 +863,12 @@ async def test_settings_sticker_via_menu(send, db):
     assert (await db.get_settings(G)).sticker_file_id == "STK2"
     await send.click(buttons(send.session.last_markup())["🗑 Stikerni o'chirish"])
     assert (await db.get_settings(G)).sticker_file_id is None
+
+
+async def test_settings_digest_toggle(send, db):
+    await admin_in_group(db)
+    await send.click(Menu(action="settings", group_id=G).pack())
+    kb = buttons(send.session.last_markup())
+    await send.click(kb["🔔 Ertalabki xabar: yoqilgan"])
+    assert not await db.get_digest_enabled(ADMIN, G)
+    assert "🔕 Ertalabki xabar: o'chirilgan" in buttons(send.session.last_markup())

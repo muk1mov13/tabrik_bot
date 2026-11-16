@@ -51,15 +51,18 @@ class SettingsInput(StatesGroup):
     sticker = State()
 
 
-async def settings_view(db: Database, group_id: int) -> tuple[str, InlineKeyboardMarkup]:
+async def settings_view(
+    db: Database, group_id: int, user_id: int
+) -> tuple[str, InlineKeyboardMarkup]:
     settings = await db.get_settings(group_id)
-    return settings_menu_text(settings), settings_keyboard(group_id, settings)
+    digest = await db.get_digest_enabled(user_id, group_id)
+    return settings_menu_text(settings), settings_keyboard(group_id, settings, digest)
 
 
 @router.callback_query(Menu.filter(F.action == "settings"))
 async def cb_settings(callback: CallbackQuery, callback_data: Menu, bot: Bot, db: Database):
     if await ensure_manager(callback, bot, db, callback_data.group_id):
-        text, keyboard = await settings_view(db, callback_data.group_id)
+        text, keyboard = await settings_view(db, callback_data.group_id, callback.from_user.id)
         await show(callback, text, keyboard)
 
 
@@ -79,7 +82,7 @@ async def cb_set_time(
         await callback.answer(STALE_TEXT, show_alert=True)
         return
     await db.set_setting(group_id, "notify_time", time(*divmod(minutes, 60)))
-    text, keyboard = await settings_view(db, group_id)
+    text, keyboard = await settings_view(db, group_id, callback.from_user.id)
     await show(callback, text, keyboard)
 
 
@@ -92,7 +95,7 @@ async def cb_set_remind(callback: CallbackQuery, callback_data: SetRemind, bot: 
         await callback.answer(STALE_TEXT, show_alert=True)
         return
     await db.set_setting(group_id, "remind_days", days)
-    text, keyboard = await settings_view(db, group_id)
+    text, keyboard = await settings_view(db, group_id, callback.from_user.id)
     await show(callback, text, keyboard)
 
 
@@ -120,14 +123,17 @@ async def cb_settings_action(
         await _send_preview(callback, bot, db, config, group_id)
         return
 
-    if action == "reset_greeting":
+    if action == "digest":
+        enabled = await db.get_digest_enabled(callback.from_user.id, group_id)
+        await db.set_digest_enabled(callback.from_user.id, group_id, not enabled)
+    elif action == "reset_greeting":
         await db.set_setting(group_id, "greeting_template", None)
     elif action == "del_sticker":
         await db.set_setting(group_id, "sticker_file_id", None)
     else:
         await callback.answer(STALE_TEXT, show_alert=True)
         return
-    text, keyboard = await settings_view(db, group_id)
+    text, keyboard = await settings_view(db, group_id, callback.from_user.id)
     await show(callback, text, keyboard)
 
 
@@ -149,7 +155,7 @@ async def _send_preview(
             await bot.send_sticker(chat_id, settings.sticker_file_id)
         except TelegramAPIError:
             pass  # stiker o'chirilgan bo'lishi mumkin — ko'rish uchun muhim emas
-    menu_text, keyboard = await settings_view(db, group_id)
+    menu_text, keyboard = await settings_view(db, group_id, chat_id)
     await bot.send_message(chat_id, menu_text, reply_markup=keyboard)
     await callback.answer()
 
@@ -196,5 +202,5 @@ async def _save_and_show(
     if not await ensure_manager(message, bot, db, group_id):
         return
     await db.set_setting(group_id, field, value)
-    text, keyboard = await settings_view(db, group_id)
+    text, keyboard = await settings_view(db, group_id, message.from_user.id)
     await message.answer(text, reply_markup=keyboard)
