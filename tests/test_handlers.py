@@ -257,6 +257,60 @@ async def test_add_list_edit_remove(send, db):
     assert await db.count_birthdays(G) == 1
 
 
+async def test_remove_by_picking(send, db):
+    ali = await db.add_birthday(G, "Ali", 1, 1)
+    await db.add_birthday(G, "Vali", 2, 2)
+
+    (reply,) = await send("/list")
+    assert "Ali" in reply and str(ali) not in reply.split("Ali")[0]
+    assert "🗑 O'chirish" in buttons(send.session.last_markup())
+
+    (reply,) = await send("/remove")
+    picks = buttons(send.session.last_markup())
+    ali_button = next(data for text, data in picks.items() if text.startswith("Ali"))
+
+    async def click(data: str, from_id: int = ADMIN) -> list[str]:
+        callback = CallbackQuery(
+            id="cb", from_user=user(from_id), chat_instance="ci", message=message("x"), data=data
+        )
+        return await send(update=Update(update_id=next(_ids), callback_query=callback))
+
+    # Oddiy a'zo tugmani bossa ham o'chira olmaydi
+    assert await click(ali_button, from_id=MEMBER) == []
+    assert "⛔" in send.session.last_alert().text
+
+    (reply,) = await click(ali_button)
+    assert "rostdan" in reply
+    yes = buttons(send.session.last_markup())["Ha, o'chirish"]
+    (reply,) = await click(yes)
+    assert "O'chirildi" in reply
+    assert any(text.startswith("Vali") for text in buttons(send.session.last_markup()))
+    assert [b.name for b in await db.list_birthdays(G)] == ["Vali"]
+
+
+async def test_edit_by_picking(send, db):
+    ali = await db.add_birthday(G, "Ali", 1, 1)
+
+    await send("/edit")
+    picks = buttons(send.session.last_markup())
+    ali_button = next(data for text, data in picks.items() if text.startswith("Ali"))
+    callback = CallbackQuery(
+        id="cb", from_user=user(ADMIN), chat_instance="ci", message=message("x"), data=ali_button
+    )
+    texts = await send(update=Update(update_id=next(_ids), callback_query=callback))
+    assert "yangi sanani" in texts[-1]
+
+    (reply,) = await send("31.02")
+    assert "mavjud emas" in reply  # holat saqlanadi
+    (reply,) = await send("Ali Valiyev 16.03.1998")
+    assert "Yangilandi" in reply
+    b = await db.get_birthday(G, ali)
+    assert (b.name, b.day, b.month, b.year) == ("Ali Valiyev", 16, 3, 1998)
+
+    # Holat tugadi — oddiy matn endi hech narsani o'zgartirmaydi
+    assert await send("20.04") == []
+
+
 async def test_non_admin_cannot_modify(send, db):
     (reply,) = await send("/add Ali 15.03", from_id=MEMBER)
     assert "⛔" in reply

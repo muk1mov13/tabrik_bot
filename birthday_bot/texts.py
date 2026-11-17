@@ -41,8 +41,8 @@ HELP_TEXT = (
     "• <code>/menu</code> — tugmali menyu: qo'shish, ro'yxat, sozlamalar (eng oson yo'l)\n"
     "• <code>/add Ism 15.03</code> yoki <code>/add Ism 15.03.1998</code>\n"
     "• odam xabariga reply qilib <code>/add 15.03</code> — tabrikda u belgilanadi\n"
-    "• <code>/edit ID Ism 15.03.1998</code> yoki <code>/edit ID 15.03</code>\n"
-    "• <code>/remove ID</code> — yozuvni o'chirish\n"
+    "• <code>/edit</code> — ro'yxatdan tanlab ism yoki sanani o'zgartirish\n"
+    "• <code>/remove</code> — ro'yxatdan tanlab o'chirish\n"
     "• <code>/settings time 09:00</code> — tabrik vaqti\n"
     "• <code>/settings remind 3</code> — 3 kun oldin eslatma (0 — o'chirish)\n"
     "• <code>/settings upcoming 14</code> — /upcoming necha kunni ko'rsatadi\n"
@@ -52,7 +52,7 @@ HELP_TEXT = (
     "• odam xabariga reply qilib <code>/manager</code> — boshqaruvchi tayinlash "
     "(yoki menyuda 👥 Boshqaruvchilar → 🔗 Taklif havolasi) "
     "(<code>/manager off</code> — olib tashlash)\n\n"
-    "ID ni /list dan oling. Botni guruhga qo'shing — u tug'ilgan kuni bor "
+    "Botni guruhga qo'shing — u tug'ilgan kuni bor "
     "odamni har kuni tabriklab turadi 🎉"
 )
 
@@ -227,7 +227,7 @@ def format_date(day: int, month: int, year: Optional[int] = None) -> str:
 
 def birthday_line(b: Birthday) -> str:
     year_part = f" ({b.year})" if b.year else ""
-    return f"• [{b.id}] {mention(b.name, b.user_id)} — {b.day} {MONTH_NAMES[b.month]}{year_part}"
+    return f"• {mention(b.name, b.user_id)} — {b.day} {MONTH_NAMES[b.month]}{year_part}"
 
 
 def upcoming_line(item: Upcoming) -> str:

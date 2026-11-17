@@ -86,14 +86,14 @@ Serverga joylash: [deploy/DEPLOY.md](deploy/DEPLOY.md) (Ubuntu + systemd).
 | `/settings` | hamma | Guruh sozlamalarini ko'rish |
 | `/add Ism 15.03[.1998]` | boshqaruvchi | Tug'ilgan kun qo'shish (yil bilan — yosh hisoblanadi) |
 | reply + `/add 15.03` | boshqaruvchi | Odam xabariga reply qilib qo'shish — tabrikda u belgilanadi (mention) |
-| `/edit ID Ism 15.03.1998` | boshqaruvchi | Ism va sanani o'zgartirish (`/edit ID 15.03` — faqat sana) |
-| `/remove ID` | boshqaruvchi | Yozuvni o'chirish |
+| `/edit` | boshqaruvchi | Ro'yxatdan tanlab ism va sanani o'zgartirish (yoki `/list` ostidagi ✏️ tugmasi) |
+| `/remove` | boshqaruvchi | Ro'yxatdan tanlab o'chirish (yoki `/list` ostidagi 🗑 tugmasi) |
 | `/settings time 09:00` | boshqaruvchi | Guruh tabrik vaqti |
 | `/settings remind 3` | boshqaruvchi | Tug'ilgan kunga 3 kun qolganda eslatma (`0` — o'chirish) |
 | `/settings upcoming 14` | boshqaruvchi | `/upcoming` necha kunni ko'rsatadi |
 | reply + `/setsticker` | boshqaruvchi | Stikerga reply qilib — tabrikdan keyin shu stiker yuboriladi (`/setsticker off`) |
 
-`ID` ni `/list` dan oling. Shaxsiy chatda bu buyruqlar faqat
+Shaxsiy chatda bu buyruqlar faqat
 `DEFAULT_GROUP_ID` guruhining boshqaruvchilari uchun ishlaydi.
 
 29-fevralda tug'ilganlar kabisa bo'lmagan yillarda 28-fevralda tabriklanadi.
